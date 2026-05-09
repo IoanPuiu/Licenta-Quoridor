@@ -7,10 +7,7 @@ import model.MoveType;
 import model.Player;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class GameStateTest {
 
@@ -31,24 +28,37 @@ public class GameStateTest {
 
         GameState gameState = new GameState(board, playerInTurn, opponent);
 
-        int[] state = gameState.getState();
-        assertArrayEquals(new int[]{176, 104, 9, 9}, Arrays.copyOfRange(state, 0, 4));
-        assertEquals(1, countInWallPositions(state, encodeWall(2, 3, board.getBoardLength(), true)));
-        assertEquals(1, countInWallPositions(state, encodeWall(4, 5, board.getBoardLength(), false)));
+        assertArrayEquals(new int[]{
+                76, 4, 9, 9,
+                38, 75, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1
+        }, gameState.getState());
     }
 
-    private int encodeWall(int row, int col, int boardLength, boolean isHorizontal) {
-        int doubleOfCellCode = (row * boardLength + col) * 2;
-        return isHorizontal ? doubleOfCellCode : doubleOfCellCode + 1;
-    }
+    @Test
+    public void constructorKeepsWallCodeZeroDistinctFromEmptyWallSlots() {
+        Board board = new Board(9);
+        Player playerInTurn = new Player("First Player", false, 8, 4, 0, Color.CYAN);
+        Player opponent = new Player("Second Player", false, 0, 4, 8, Color.ORANGE);
+        board.getOneCell(playerInTurn.getRow(), playerInTurn.getCol()).setPlayer(playerInTurn);
+        board.getOneCell(opponent.getRow(), opponent.getCol()).setPlayer(opponent);
 
-    private int countInWallPositions(int[] state, int wallCode) {
-        int count = 0;
-        for (int i = 4; i < state.length; i++) {
-            if (state[i] == wallCode) {
-                count++;
-            }
-        }
-        return count;
+        Move zeroCodeWall = new Move(playerInTurn, MoveType.WALL_PLACE, 0, 0, true);
+        board.placeWall(zeroCodeWall);
+        playerInTurn.update(zeroCodeWall);
+
+        GameState gameState = new GameState(board, playerInTurn, opponent);
+
+        assertArrayEquals(new int[]{
+                76, 4, 9, 10,
+                0, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1
+        }, gameState.getState());
     }
 }
