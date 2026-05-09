@@ -44,7 +44,8 @@ public class Game {
         new Thread(() -> {
             while (true) {
                 if (playerInTurn.isAI()) {
-                    Move move = algorithm.generateMove();
+                    Player opponent = playerInTurn == firstPlayer ? secondPlayer : firstPlayer;
+                    Move move = algorithm.generateMove(board, playerInTurn, opponent);
                     makeMove(move);
                 } else {
                     drawPossiblePawnMoves();

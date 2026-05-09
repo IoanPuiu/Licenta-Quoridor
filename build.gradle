@@ -1,12 +1,11 @@
 plugins {
     id 'java'
     id 'application'
-    id 'org.javamodularity.moduleplugin' version '1.8.12'
     id 'org.openjfx.javafxplugin' version '0.0.13'
     id 'org.beryx.jlink' version '2.25.0'
 }
 
-version '1.0-SNAPSHOT'
+version = '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
@@ -16,15 +15,29 @@ ext {
     junitVersion = '5.9.1'
 }
 
-sourceCompatibility = '17'
-targetCompatibility = '17'
+configurations.configureEach {
+    exclude group: 'org.datavec', module: 'datavec-data-image'
+}
+
+configurations.testRuntimeClasspath {
+    exclude group: 'org.deeplearning4j'
+    exclude group: 'org.nd4j'
+    exclude group: 'org.datavec'
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+
+    modularity.inferModulePath = false
+}
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
 application {
-    mainModule = 'GUI'
     mainClass = 'GUI.GameUI'
 }
 
@@ -35,24 +48,32 @@ javafx {
 
 dependencies {
     implementation('com.github.almasb:fxgl:17.2') {
-        exclude(group: 'org.openjfx')
+        exclude group: 'org.openjfx'
     }
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:${junitVersion}")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${junitVersion}")
+    implementation('org.deeplearning4j:deeplearning4j-core:1.0.0-beta7') {
+        exclude group: 'org.datavec', module: 'datavec-data-image'
+    }
 
-    implementation 'org.deeplearning4j:deeplearning4j-core:1.0.0-beta7'
     implementation 'org.deeplearning4j:rl4j-api:1.0.0-beta7'
     implementation 'org.deeplearning4j:rl4j-core:1.0.0-beta7'
+
+    testImplementation "org.junit.jupiter:junit-jupiter:${junitVersion}"
 }
 
 test {
     useJUnitPlatform()
+    modularity.inferModulePath = false
+    classpath = sourceSets.test.runtimeClasspath
+    moduleOptions {
+        runOnClasspath = true
+    }
 }
 
 jlink {
     imageZip = project.file("${buildDir}/distributions/app-${javafx.platform.classifier}.zip")
     options = ['--strip-debug', '--compress', '2', '--no-header-files', '--no-man-pages']
+
     launcher {
         name = 'app'
     }
