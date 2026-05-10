@@ -5,16 +5,18 @@ import model.Cell;
 import model.Player;
 import model.Wall;
 
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 
 public class GameState {
     private static final int DEFAULT_BOARD_LENGTH = 9;
-    private static final int STATE_LENGTH = 24;
-    private static final int FIRST_WALL_INDEX = 4;
+    private static final int STATE_LENGTH = 25;
+    private static final int FIRST_WALL_INDEX = 5;
     private static final int EMPTY_WALL_SLOT = -1;
     private static final int PAWN_MOVE_CODE_OFFSET = 200;
 
@@ -39,7 +41,11 @@ public class GameState {
             - number between 0 and 10
             - opponent has maximum 10 walls at any state
 
-    4.  first wall code
+    4.  current player finish row
+            - number is either 0 or 8
+            - opponent finish row is always the other possible finish row
+
+    5.  first wall code
             - number is between 0 and 127
             - horizontal walls codes = (row * (boardLength - 1) + col) * 2
             - vertical walls codes = (row * (boardLength  -1) + col) * 2 + 1
@@ -48,7 +54,7 @@ public class GameState {
 
     ...
 
-    23. last wall code
+    24. last wall code
     */
 
     public int[] getState() {
@@ -84,9 +90,10 @@ public class GameState {
         state[1] = encodeCellPosition(opponent.getRow(), opponent.getCol(), board.getBoardLength());
         state[2] = playerInTurn.wallsLeft();
         state[3] = opponent.wallsLeft();
+        state[4] = playerInTurn.getFinishRow();
 
         Set<Wall> visitedWalls = new HashSet<>();
-        int wallIndex = 4;
+        int wallIndex = FIRST_WALL_INDEX;
         for (int row = 0; row < board.getBoardLength() - 1 && wallIndex < state.length; row++) {
             for (int col = 0; col < board.getBoardLength() - 1 && wallIndex < state.length; col++) {
                 Cell cell = board.getOneCell(row, col);
@@ -128,8 +135,6 @@ public class GameState {
 
     public Set<Integer> getPossiblePawnMoveCodes() {
 
-        // ATENTIE: aceasta functie trebuie sa returneze doar codurile miscarii pionului jucatorului curent, nu si ale oponentului
-
         Map<Integer, Set<Integer>> graph = generatePawnMoveGraph();
         int playerPosition = state[0];
         int opponentPosition = state[1];
@@ -161,6 +166,30 @@ public class GameState {
 
     public boolean isLegalPawnMove(int moveCode) {
         return getPossiblePawnMoveCodes().contains(moveCode);
+    }
+
+    public Set<Integer> getPossibleWallPlacementCodes() {
+        Set<Integer> possibleWallPlacementCodes = new HashSet<>();
+
+        if(state[2] == 0)
+            return possibleWallPlacementCodes;
+
+        for (int wallCode = 0; wallCode < maxWallCode(); wallCode++) {
+            if (isLegalWallPlacement(wallCode)) {
+                possibleWallPlacementCodes.add(wallCode);
+            }
+        }
+
+        return possibleWallPlacementCodes;
+    }
+
+    public boolean isLegalWallPlacement(int wallCode) {
+        return state[2] > 0
+                && hasEmptyWallSlot()
+                && isValidWallCode(wallCode)
+                && isValidCurrentPlayerFinishRow()
+                && !conflictsWithExistingWall(wallCode)
+                && bothPlayersHavePathAfterWallPlacement(wallCode);
     }
 
     private void addJumpOrSideMoves(Map<Integer, Set<Integer>> graph, Set<Integer> possibleMoves, int playerPosition, int opponentPosition) {
@@ -223,6 +252,109 @@ public class GameState {
     private void removeGraphEdge(Map<Integer, Set<Integer>> graph, int firstCellPosition, int secondCellPosition) {
         graph.get(firstCellPosition).remove(secondCellPosition);
         graph.get(secondCellPosition).remove(firstCellPosition);
+    }
+
+    private boolean hasEmptyWallSlot() {
+        for (int i = FIRST_WALL_INDEX; i < state.length; i++) {
+            if (state[i] == EMPTY_WALL_SLOT) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean isValidWallCode(int wallCode) {
+        return wallCode >= 0 && wallCode < maxWallCode();
+    }
+
+    private int maxWallCode() {
+        int wallGridLength = boardLength - 1;
+        return wallGridLength * wallGridLength * 2;
+    }
+
+    private boolean isValidCurrentPlayerFinishRow() {
+        return state[4] == 0 || state[4] == boardLength - 1;
+    }
+
+    private boolean conflictsWithExistingWall(int wallCode) {
+        for (int i = FIRST_WALL_INDEX; i < state.length; i++) {
+            if (state[i] != EMPTY_WALL_SLOT && conflicts(wallCode, state[i])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean conflicts(int firstWallCode, int secondWallCode) {
+        if (wallAnchor(firstWallCode) == wallAnchor(secondWallCode)) {
+            return true;
+        }
+
+        if (isHorizontalWall(firstWallCode) != isHorizontalWall(secondWallCode)) {
+            return false;
+        }
+
+        if (isHorizontalWall(firstWallCode)) {
+            return wallRow(firstWallCode) == wallRow(secondWallCode)
+                    && Math.abs(wallCol(firstWallCode) - wallCol(secondWallCode)) <= 1;
+        }
+
+        return wallCol(firstWallCode) == wallCol(secondWallCode)
+                && Math.abs(wallRow(firstWallCode) - wallRow(secondWallCode)) <= 1;
+    }
+
+    private int wallAnchor(int wallCode) {
+        return wallCode / 2;
+    }
+
+    private boolean isHorizontalWall(int wallCode) {
+        return wallCode % 2 == 0;
+    }
+
+    private int wallRow(int wallCode) {
+        return wallAnchor(wallCode) / (boardLength - 1);
+    }
+
+    private int wallCol(int wallCode) {
+        return wallAnchor(wallCode) % (boardLength - 1);
+    }
+
+    private boolean bothPlayersHavePathAfterWallPlacement(int wallCode) {
+        Map<Integer, Set<Integer>> graph = generatePawnMoveGraph();
+        removeWallEdges(graph, wallCode);
+
+        int currentPlayerFinishRow = state[4];
+        int opponentFinishRow = currentPlayerFinishRow == 0 ? boardLength - 1 : 0;
+        return hasPathToFinishRow(graph, state[0], currentPlayerFinishRow)
+                && hasPathToFinishRow(graph, state[1], opponentFinishRow);
+    }
+
+    private boolean hasPathToFinishRow(Map<Integer, Set<Integer>> graph, int startPosition, int finishRow) {
+        if (!graph.containsKey(startPosition)) {
+            return false;
+        }
+
+        Set<Integer> visited = new HashSet<>();
+        Queue<Integer> queue = new ArrayDeque<>();
+        visited.add(startPosition);
+        queue.add(startPosition);
+
+        while (!queue.isEmpty()) {
+            int position = queue.remove();
+            if (decodeRow(position) == finishRow) {
+                return true;
+            }
+
+            for (int neighbourPosition : graph.get(position)) {
+                if (visited.add(neighbourPosition)) {
+                    queue.add(neighbourPosition);
+                }
+            }
+        }
+
+        return false;
     }
 
     private int decodeRow(int cellPosition) {

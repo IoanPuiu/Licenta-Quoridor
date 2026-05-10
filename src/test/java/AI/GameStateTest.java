@@ -29,7 +29,7 @@ public class GameStateTest {
         GameState gameState = new GameState(board, playerInTurn, opponent);
 
         assertArrayEquals(new int[]{
-                76, 4, 9, 9,
+                76, 4, 9, 9, 0,
                 38, 75, -1, -1,
                 -1, -1, -1, -1,
                 -1, -1, -1, -1,
@@ -53,8 +53,28 @@ public class GameStateTest {
         GameState gameState = new GameState(board, playerInTurn, opponent);
 
         assertArrayEquals(new int[]{
-                76, 4, 9, 10,
+                76, 4, 9, 10, 0,
                 0, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1,
+                -1, -1, -1, -1
+        }, gameState.getState());
+    }
+
+    @Test
+    public void constructorStoresCurrentPlayerFinishRowWhenItIsBottomRow() {
+        Board board = new Board(9);
+        Player playerInTurn = new Player("Second Player", false, 0, 4, 8, Color.ORANGE);
+        Player opponent = new Player("First Player", false, 8, 4, 0, Color.CYAN);
+        board.getOneCell(playerInTurn.getRow(), playerInTurn.getCol()).setPlayer(playerInTurn);
+        board.getOneCell(opponent.getRow(), opponent.getCol()).setPlayer(opponent);
+
+        GameState gameState = new GameState(board, playerInTurn, opponent);
+
+        assertArrayEquals(new int[]{
+                4, 76, 10, 10, 8,
+                -1, -1, -1, -1,
                 -1, -1, -1, -1,
                 -1, -1, -1, -1,
                 -1, -1, -1, -1,

@@ -13,7 +13,7 @@ public class GameStateGraphTest {
     @Test
     public void generatePawnMoveGraphBuildsExpectedHardcodedAdjacency() {
         GameState gameState = new GameState(new int[]{
-                40, 31, 10, 10,
+                40, 31, 10, 10, 0,
                 38, 75, -1, -1,
                 -1, -1, -1, -1,
                 -1, -1, -1, -1,
