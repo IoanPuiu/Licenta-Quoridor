@@ -3,7 +3,7 @@ package AI;
 import java.util.List;
 import java.util.Random;
 
-public class MtcsAlgorithm {
+public class Mtcs {
 
     public int generateMove(GameState state, int depth) {
         List<Integer> legalMoves = LegalMoveSelector.legalMoves(state);

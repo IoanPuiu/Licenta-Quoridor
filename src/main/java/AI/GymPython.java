@@ -10,7 +10,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class GymPythonAlgorithm {
+public class GymPython {
 
     private static final String GYM_COMMAND_PROPERTY = "quoridor.gym.command";
     private static final String GYM_COMMAND_ENV = "QUORIDOR_GYM_PYTHON_COMMAND";
