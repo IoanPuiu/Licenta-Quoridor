@@ -5,7 +5,7 @@ import javafx.scene.paint.Color;
 public class Player {
 
     private final String name;
-    private final boolean isAI;
+    private final PlayerType playerType;
     private int row;
     private int col;
     private int wallsLeft;
@@ -18,8 +18,12 @@ public class Player {
 
 
     public Player(String name, boolean isAI, int row, int col, int finishRow, Color color) {
+        this(name, isAI ? PlayerType.MINIMAX : PlayerType.HUMAN, row, col, finishRow, color);
+    }
+
+    public Player(String name, PlayerType playerType, int row, int col, int finishRow, Color color) {
         this.name = name;
-        this.isAI = isAI;
+        this.playerType = playerType;
         this.row = row;
         this.col = col;
         this.finishRow = finishRow;
@@ -40,7 +44,11 @@ public class Player {
     }
 
     public boolean isAI() {
-        return isAI;
+        return playerType.isAI();
+    }
+
+    public PlayerType getPlayerType() {
+        return playerType;
     }
 
     public Color getColor() {

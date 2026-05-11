@@ -8,6 +8,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import model.PlayerType;
 
 import java.util.function.BiConsumer;
 
@@ -17,9 +18,9 @@ public class StartWindow {
     private static final int SCENE_HEIGHT = 500;
 
     private final Stage stage;
-    private final BiConsumer<Boolean, Boolean> startGameHandler;
+    private final BiConsumer<PlayerType, PlayerType> startGameHandler;
 
-    public StartWindow(Stage stage, BiConsumer<Boolean, Boolean> startGameHandler) {
+    public StartWindow(Stage stage, BiConsumer<PlayerType, PlayerType> startGameHandler) {
         this.stage = stage;
         this.startGameHandler = startGameHandler;
     }
@@ -31,8 +32,8 @@ public class StartWindow {
     }
 
     private Scene createScene() {
-        ComboBox<String> firstPlayer = createPlayerComboBox("Choose First Player Intelligence");
-        ComboBox<String> secondPlayer = createPlayerComboBox("Choose Second Player Intelligence");
+        ComboBox<PlayerType> firstPlayer = createPlayerComboBox("Choose First Player");
+        ComboBox<PlayerType> secondPlayer = createPlayerComboBox("Choose Second Player");
 
         Button startButton = new Button("Start");
         startButton.setDisable(true);
@@ -43,11 +44,8 @@ public class StartWindow {
                 startButton.setDisable(isInvalidSelection(firstPlayer, secondPlayer)));
 
         startButton.setOnAction(event -> {
-            boolean isFirstPlayerAI = isAI(firstPlayer);
-            boolean isSecondPlayerAI = isAI(secondPlayer);
-
             stage.close();
-            startGameHandler.accept(isFirstPlayerAI, isSecondPlayerAI);
+            startGameHandler.accept(firstPlayer.getValue(), secondPlayer.getValue());
         });
 
         VBox content = new VBox(10, firstPlayer, secondPlayer, startButton);
@@ -57,18 +55,14 @@ public class StartWindow {
         return new Scene(new BorderPane(content), SCENE_WIDTH, SCENE_HEIGHT);
     }
 
-    private ComboBox<String> createPlayerComboBox(String promptText) {
-        ComboBox<String> player = new ComboBox<>();
-        player.getItems().addAll("AI", "Human");
+    private ComboBox<PlayerType> createPlayerComboBox(String promptText) {
+        ComboBox<PlayerType> player = new ComboBox<>();
+        player.getItems().addAll(PlayerType.values());
         player.setPromptText(promptText);
         return player;
     }
 
-    private boolean isInvalidSelection(ComboBox<String> firstPlayer, ComboBox<String> secondPlayer) {
+    private boolean isInvalidSelection(ComboBox<PlayerType> firstPlayer, ComboBox<PlayerType> secondPlayer) {
         return firstPlayer.getValue() == null || secondPlayer.getValue() == null;
-    }
-
-    private boolean isAI(ComboBox<String> player) {
-        return "AI".equals(player.getValue());
     }
 }

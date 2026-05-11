@@ -5,6 +5,7 @@ import javafx.stage.Stage;
 import model.Game;
 import model.Move;
 import model.Player;
+import model.PlayerType;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -31,13 +32,13 @@ public class GameUI extends Application {
         startWindow.show();
     }
 
-    private void startGame(boolean isFirstPlayerAI, boolean isSecondPlayerAI) {
+    private void startGame(PlayerType firstPlayerType, PlayerType secondPlayerType) {
         resetInputState();
 
         gameWindow = new GameWindow(this::storeClickCoordinates);
         gameWindow.show();
 
-        new Game(this, isFirstPlayerAI, isSecondPlayerAI);
+        new Game(this, firstPlayerType, secondPlayerType);
     }
 
     private void resetInputState() {

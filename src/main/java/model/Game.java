@@ -1,6 +1,7 @@
 package model;
 
 import AI.Algorithm;
+import AI.GameState;
 import GUI.GameUI;
 import javafx.application.Platform;
 import javafx.scene.paint.Color;
@@ -17,10 +18,16 @@ public class Game {
     private final Algorithm algorithm;
 
     public Game(GameUI gui, boolean isFirstPlayerAI, boolean isSecondPlayerAI) {
+        this(gui,
+                isFirstPlayerAI ? PlayerType.MINIMAX : PlayerType.HUMAN,
+                isSecondPlayerAI ? PlayerType.MINIMAX : PlayerType.HUMAN);
+    }
+
+    public Game(GameUI gui, PlayerType firstPlayerType, PlayerType secondPlayerType) {
         this.gui = gui;
         board = new Board(9);
-        firstPlayer = new Player("First Player", isFirstPlayerAI, board.getBoardLength() - 1, board.getBoardLength() / 2, 0, Color.CYAN);
-        secondPlayer = new Player("Second Player", isSecondPlayerAI, 0, board.getBoardLength() / 2, board.getBoardLength() - 1, Color.ORANGE);
+        firstPlayer = new Player("First Player", firstPlayerType, board.getBoardLength() - 1, board.getBoardLength() / 2, 0, Color.CYAN);
+        secondPlayer = new Player("Second Player", secondPlayerType, 0, board.getBoardLength() / 2, board.getBoardLength() - 1, Color.ORANGE);
         board.getOneCell(firstPlayer.getRow(), firstPlayer.getCol()).setPlayer(firstPlayer);
         board.getOneCell(secondPlayer.getRow(), secondPlayer.getCol()).setPlayer(secondPlayer);
         board.setFirstPlayer(firstPlayer);
@@ -45,7 +52,9 @@ public class Game {
             while (true) {
                 if (playerInTurn.isAI()) {
                     Player opponent = playerInTurn == firstPlayer ? secondPlayer : firstPlayer;
-                    Move move = algorithm.generateMove(board, playerInTurn, opponent);
+                    GameState state = new GameState(board, playerInTurn, opponent);
+                    int moveCode = algorithm.generateMove(state, playerInTurn.getPlayerType());
+                    Move move = createMoveFromCode(moveCode);
                     makeMove(move);
                 } else {
                     drawPossiblePawnMoves();
@@ -83,6 +92,25 @@ public class Game {
         Platform.runLater(() -> gui.draw(move));
         board.update(move);
         playerInTurn.update(move);
+    }
+
+    private Move createMoveFromCode(int moveCode) {
+        int boardLength = board.getBoardLength();
+
+        if (GameState.isPawnMoveCode(moveCode)) {
+            return new Move(
+                    playerInTurn,
+                    MoveType.PAWN_MOVE,
+                    GameState.decodePawnMoveRow(moveCode, boardLength),
+                    GameState.decodePawnMoveCol(moveCode, boardLength));
+        }
+
+        return new Move(
+                playerInTurn,
+                MoveType.WALL_PLACE,
+                GameState.decodeWallRow(moveCode, boardLength),
+                GameState.decodeWallCol(moveCode, boardLength),
+                GameState.decodeWallIsHorizontal(moveCode));
     }
 
     private Move calculateMove(int[] coordinates) {

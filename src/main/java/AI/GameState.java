@@ -61,6 +61,38 @@ public class GameState {
         return state;
     }
 
+    public static boolean isPawnMoveCode(int moveCode) {
+        return moveCode >= PAWN_MOVE_CODE_OFFSET;
+    }
+
+    public static int decodePawnMoveRow(int moveCode, int boardLength) {
+        return decodePawnMovePosition(moveCode) / boardLength;
+    }
+
+    public static int decodePawnMoveCol(int moveCode, int boardLength) {
+        return decodePawnMovePosition(moveCode) % boardLength;
+    }
+
+    public static int decodeWallRow(int moveCode, int boardLength) {
+        return wallAnchor(moveCode) / (boardLength - 1);
+    }
+
+    public static int decodeWallCol(int moveCode, int boardLength) {
+        return wallAnchor(moveCode) % (boardLength - 1);
+    }
+
+    public static boolean decodeWallIsHorizontal(int moveCode) {
+        return moveCode % 2 == 0;
+    }
+
+    private static int decodePawnMovePosition(int moveCode) {
+        return moveCode - PAWN_MOVE_CODE_OFFSET;
+    }
+
+    private static int wallAnchor(int moveCode) {
+        return moveCode / 2;
+    }
+
     public GameState() {
         this(DEFAULT_BOARD_LENGTH);
     }
@@ -303,10 +335,6 @@ public class GameState {
 
         return wallCol(firstWallCode) == wallCol(secondWallCode)
                 && Math.abs(wallRow(firstWallCode) - wallRow(secondWallCode)) <= 1;
-    }
-
-    private int wallAnchor(int wallCode) {
-        return wallCode / 2;
     }
 
     private boolean isHorizontalWall(int wallCode) {
