@@ -15,7 +15,13 @@ public class GymPython {
     private static final String GYM_COMMAND_PROPERTY = "quoridor.gym.command";
     private static final String GYM_COMMAND_ENV = "QUORIDOR_GYM_PYTHON_COMMAND";
 
-    public int generateMove(GameState state) {
+    private final GameState state;
+
+    public GymPython(GameState state) {
+        this.state = state;
+    }
+
+    public int generateMove() {
         return requestMoveFromPython(state).orElseGet(() -> LegalMoveSelector.firstLegalMove(state));
     }
 

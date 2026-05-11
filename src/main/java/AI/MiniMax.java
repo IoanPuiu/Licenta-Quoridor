@@ -2,7 +2,13 @@ package AI;
 
 public class MiniMax {
 
-    public int generateMove(GameState state) {
+    GameState state;
+
+    public MiniMax(GameState state) {
+        this.state = state;
+    }
+
+    public int generateMove() {
         return LegalMoveSelector.firstLegalMove(state);
     }
 }

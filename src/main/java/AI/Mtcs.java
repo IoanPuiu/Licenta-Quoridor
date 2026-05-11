@@ -5,7 +5,15 @@ import java.util.Random;
 
 public class Mtcs {
 
-    public int generateMove(GameState state, int depth) {
+    private final GameState state;
+    private final int depth;
+
+    public Mtcs(GameState state, int depth) {
+        this.state = state;
+        this.depth = depth;
+    }
+
+    public int generateMove() {
         List<Integer> legalMoves = LegalMoveSelector.legalMoves(state);
         if (legalMoves.isEmpty()) {
             throw new IllegalStateException("No legal moves available.");
