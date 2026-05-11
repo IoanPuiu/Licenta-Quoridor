@@ -5,7 +5,7 @@ import javafx.stage.Stage;
 import model.Game;
 import model.Move;
 import model.Player;
-import model.PlayerType;
+import model.PlayerProfile;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -17,6 +17,7 @@ public class GameUI extends Application {
     private volatile int boardX;
     private volatile int boardY;
     private GameWindow gameWindow;
+    private Game currentGame;
 
     public static void main(String[] args) {
         launch(args);
@@ -32,13 +33,18 @@ public class GameUI extends Application {
         startWindow.show();
     }
 
-    private void startGame(PlayerType firstPlayerType, PlayerType secondPlayerType) {
+    private void startGame(PlayerProfile firstPlayerProfile, PlayerProfile secondPlayerProfile) {
         resetInputState();
 
-        gameWindow = new GameWindow(this::storeClickCoordinates);
+        gameWindow = new GameWindow(
+                this::storeClickCoordinates,
+                this::undoLastHumanMove,
+                this::restartGame,
+                firstPlayerProfile.displayName("First Player"),
+                secondPlayerProfile.displayName("Second Player"));
         gameWindow.show();
 
-        new Game(this, firstPlayerType, secondPlayerType);
+        currentGame = new Game(this, firstPlayerProfile, secondPlayerProfile);
     }
 
     private void resetInputState() {
@@ -51,6 +57,16 @@ public class GameUI extends Application {
         boardX = x;
         boardY = y;
         clickSemaphore.release();
+    }
+
+    private void undoLastHumanMove() {
+        if (currentGame != null) {
+            currentGame.undoToLastHumanMove();
+        }
+    }
+
+    public void wakeWaitingInput() {
+        storeClickCoordinates(0, 0);
     }
 
     public int[] getMouseClickCoordinates() {
@@ -74,9 +90,16 @@ public class GameUI extends Application {
         gameWindow.deletePossiblePawnMoves();
     }
 
+    public void redrawGame(List<Move> moves, int firstPlayerWalls, int secondPlayerWalls, boolean isFirstPlayerTurn) {
+        gameWindow.redraw(moves, firstPlayerWalls, secondPlayerWalls, isFirstPlayerTurn);
+    }
+
+    public void setUndoAvailable(boolean undoAvailable) {
+        gameWindow.setUndoAvailable(undoAvailable);
+    }
+
     public void endGame(Player player) {
-        EndGameWindow endGameWindow = new EndGameWindow(player, this::restartGame);
-        endGameWindow.show();
+        gameWindow.showGameResult(player);
     }
 
     private void restartGame() {
@@ -84,6 +107,7 @@ public class GameUI extends Application {
             gameWindow.close();
             gameWindow = null;
         }
+        currentGame = null;
 
         showStartWindow(new Stage());
     }

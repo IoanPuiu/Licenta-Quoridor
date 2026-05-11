@@ -3,9 +3,9 @@ package model;
 public enum PlayerType {
     HUMAN("Human"),
     MINIMAX("MiniMax"),
-    MTCS_10K("MTCS 10k"),
-    MTCS_30K("MTCS 30k"),
-    MTCS_60K("MTCS 60k"),
+    MTCS_EASY("MTCS Easy"),
+    MTCS_MEDIUM("MTCS Medium"),
+    MTCS_HARD("MTCS Hard"),
     GYM_PYTHON("Gym Python");
 
     private final String label;

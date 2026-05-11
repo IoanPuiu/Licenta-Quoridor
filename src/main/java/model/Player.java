@@ -55,6 +55,12 @@ public class Player {
         return color;
     }
 
+    public void reset(int row, int col, int wallsLeft) {
+        this.row = row;
+        this.col = col;
+        this.wallsLeft = wallsLeft;
+    }
+
     public void update(Move move) {
         if (move.getType() == MoveType.PAWN_MOVE) {
             row = move.getTargetRow();
