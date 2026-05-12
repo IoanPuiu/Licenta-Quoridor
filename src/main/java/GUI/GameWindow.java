@@ -16,6 +16,7 @@ import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -32,6 +33,7 @@ import model.Player;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BiConsumer;
 
 public class GameWindow {
@@ -40,24 +42,34 @@ public class GameWindow {
     private static final int INITIAL_WALLS = 10;
     private static final int CELL_SIZE = 50;
     private static final int CELL_WITH_STROKE = 56;
-    private static final int SCENE_WIDTH = 820;
-    private static final int SCENE_HEIGHT = 650;
+    private static final int BOARD_CONTENT_SIZE = BOARD_SIZE * CELL_WITH_STROKE;
+    private static final int BOARD_FRAME_PADDING = 12;
+    private static final int BOARD_FRAME_SIZE = BOARD_CONTENT_SIZE + BOARD_FRAME_PADDING * 2;
+    private static final int SCENE_WIDTH = 900;
+    private static final int SCENE_HEIGHT = 760;
 
     private final Stage stage;
     private final GridPane gridPane;
     private final BiConsumer<Integer, Integer> boardClickHandler;
     private final Runnable undoHandler;
     private final Runnable newGameHandler;
+    private final Runnable rematchHandler;
+    private final Runnable exitHandler;
     private final List<Circle> possiblePawnMoves;
     private final List<Rectangle> boardCells;
     private final List<Line> wallLines;
     private final String firstPlayerDisplayName;
     private final String secondPlayerDisplayName;
+    private final String scoreFirstPlayerDisplayName;
+    private final String scoreSecondPlayerDisplayName;
+    private final boolean scoreFirstPlayerUsesFirstColor;
+    private final boolean scoreSecondPlayerUsesFirstColor;
+    private int scoreFirstPlayerWins;
+    private int scoreSecondPlayerWins;
+    private boolean showScore;
 
     private BorderPane root;
     private StackPane boardFrame;
-    private Label title;
-    private Label playersTitle;
     private VBox firstPlayerCard;
     private VBox secondPlayerCard;
     private Label firstPlayerNameLabel;
@@ -71,41 +83,90 @@ public class GameWindow {
     private Label playerTurn;
     private Button undoButton;
     private Button newGameButton;
+    private Button rematchButton;
+    private Button exitButton;
     private MenuButton themeButton;
     private VBox controlsCard;
-    private VBox resultCard;
+    private VBox aiThinkingCard;
+    private HBox aiThinkingColumns;
+    private VBox aiThinkingMetricLabels;
+    private HBox scoreCard;
     private Label controlsTitle;
-    private Label resultTitle;
-    private Label winnerLabel;
+    private Label aiThinkingTitle;
+    private VBox firstPlayerAiThinkingSection;
+    private VBox secondPlayerAiThinkingSection;
+    private Label firstPlayerAiThinkingNameLabel;
+    private Label secondPlayerAiThinkingNameLabel;
+    private Label aiLastThinkingLabel;
+    private Label aiAverageThinkingLabel;
+    private Label aiMaxThinkingLabel;
+    private Label firstPlayerAiLastThinkingValueLabel;
+    private Label firstPlayerAiAverageThinkingValueLabel;
+    private Label firstPlayerAiMaxThinkingValueLabel;
+    private Label secondPlayerAiLastThinkingValueLabel;
+    private Label secondPlayerAiAverageThinkingValueLabel;
+    private Label secondPlayerAiMaxThinkingValueLabel;
+    private HBox scoreNumbers;
+    private Label firstPlayerScoreNameLabel;
+    private Label secondPlayerScoreNameLabel;
+    private Label firstPlayerScoreValueLabel;
+    private Label secondPlayerScoreValueLabel;
+    private Label scoreDashLabel;
     private boolean isFirstPlayerTurn;
     private boolean isFirstPlayerWinner;
+    private boolean isGameOver;
 
     public GameWindow(
             BiConsumer<Integer, Integer> boardClickHandler,
             Runnable undoHandler,
             Runnable newGameHandler,
+            Runnable rematchHandler,
+            Runnable exitHandler,
             String firstPlayerDisplayName,
-            String secondPlayerDisplayName) {
+            String secondPlayerDisplayName,
+            String scoreFirstPlayerDisplayName,
+            String scoreSecondPlayerDisplayName,
+            boolean scoreFirstPlayerUsesFirstColor,
+            boolean scoreSecondPlayerUsesFirstColor,
+            int scoreFirstPlayerWins,
+            int scoreSecondPlayerWins,
+            boolean showScore,
+            boolean isFirstPlayerStarting) {
         this.stage = new Stage();
         this.gridPane = new GridPane();
         this.boardClickHandler = boardClickHandler;
         this.undoHandler = undoHandler;
         this.newGameHandler = newGameHandler;
+        this.rematchHandler = rematchHandler;
+        this.exitHandler = exitHandler;
         this.firstPlayerDisplayName = firstPlayerDisplayName;
         this.secondPlayerDisplayName = secondPlayerDisplayName;
+        this.scoreFirstPlayerDisplayName = scoreFirstPlayerDisplayName;
+        this.scoreSecondPlayerDisplayName = scoreSecondPlayerDisplayName;
+        this.scoreFirstPlayerUsesFirstColor = scoreFirstPlayerUsesFirstColor;
+        this.scoreSecondPlayerUsesFirstColor = scoreSecondPlayerUsesFirstColor;
+        this.scoreFirstPlayerWins = scoreFirstPlayerWins;
+        this.scoreSecondPlayerWins = scoreSecondPlayerWins;
+        this.showScore = showScore;
         this.possiblePawnMoves = new ArrayList<>();
         this.boardCells = new ArrayList<>();
         this.wallLines = new ArrayList<>();
-        this.isFirstPlayerTurn = true;
+        this.isFirstPlayerTurn = isFirstPlayerStarting;
+        this.isGameOver = false;
     }
 
     public void show() {
         stage.setScene(createScene());
         stage.setTitle("Quoridor");
+        stage.setOnCloseRequest(event -> {
+            event.consume();
+            exitHandler.run();
+        });
         stage.show();
     }
 
     public void close() {
+        stage.setOnCloseRequest(null);
         stage.close();
     }
 
@@ -113,15 +174,48 @@ public class GameWindow {
         undoButton.setDisable(!undoAvailable);
     }
 
-    public void showGameResult(Player winner) {
-        isFirstPlayerWinner = winner.getColor() == Color.CYAN;
+    public void showGameResult(Player winner, int scoreFirstPlayerWins, int scoreSecondPlayerWins) {
+        isGameOver = true;
+        isFirstPlayerWinner = isBottomPlayer(winner);
         Color winnerColor = isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        winnerLabel.setText(winner + " won");
-        winnerLabel.setTextFill(winnerColor);
-        playerTurn.setText("Game over");
+        playerTurn.setText("Game over - " + playerDisplayName(winner) + " won");
         GuiTheme.styleTurnLabel(playerTurn, winnerColor);
-        resultCard.setVisible(true);
-        resultCard.setManaged(true);
+        updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, true);
+    }
+
+    public void updateScore(int scoreFirstPlayerWins, int scoreSecondPlayerWins, boolean showScore) {
+        this.scoreFirstPlayerWins = scoreFirstPlayerWins;
+        this.scoreSecondPlayerWins = scoreSecondPlayerWins;
+        this.showScore = showScore;
+
+        if (firstPlayerScoreValueLabel != null && secondPlayerScoreValueLabel != null) {
+            firstPlayerScoreValueLabel.setText(String.valueOf(scoreFirstPlayerWins));
+            secondPlayerScoreValueLabel.setText(String.valueOf(scoreSecondPlayerWins));
+        }
+
+        if (scoreCard != null) {
+            scoreCard.setVisible(showScore);
+            scoreCard.setManaged(showScore);
+        }
+    }
+
+    public void updateThinkingTime(
+            long firstPlayerLastMoveNanos,
+            long firstPlayerAverageNanos,
+            long firstPlayerMaxNanos,
+            long secondPlayerLastMoveNanos,
+            long secondPlayerAverageNanos,
+            long secondPlayerMaxNanos) {
+        if (firstPlayerAiLastThinkingValueLabel == null || secondPlayerAiLastThinkingValueLabel == null) {
+            return;
+        }
+
+        firstPlayerAiLastThinkingValueLabel.setText(formatThinkingTime(firstPlayerLastMoveNanos));
+        firstPlayerAiAverageThinkingValueLabel.setText(formatThinkingTime(firstPlayerAverageNanos));
+        firstPlayerAiMaxThinkingValueLabel.setText(formatThinkingTime(firstPlayerMaxNanos));
+        secondPlayerAiLastThinkingValueLabel.setText(formatThinkingTime(secondPlayerLastMoveNanos));
+        secondPlayerAiAverageThinkingValueLabel.setText(formatThinkingTime(secondPlayerAverageNanos));
+        secondPlayerAiMaxThinkingValueLabel.setText(formatThinkingTime(secondPlayerMaxNanos));
     }
 
     private Scene createScene() {
@@ -129,28 +223,42 @@ public class GameWindow {
         createBoard();
         createPawns();
 
-        title = new Label("Quoridor");
-        GuiTheme.styleWindowTitle(title, 28);
-
         themeButton = GuiTheme.createThemeMenu(this::applyTheme);
         undoButton = new Button("Undo");
         undoButton.setDisable(true);
         undoButton.setOnAction(event -> undoHandler.run());
-        GuiTheme.styleCompactButton(undoButton);
+        GuiTheme.styleUndoButton(undoButton);
 
-        HBox header = new HBox(18, title, playerTurn);
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.setPadding(new Insets(0, 0, 12, 0));
+        newGameButton = new Button("New Game");
+        newGameButton.setOnAction(event -> newGameHandler.run());
+        GuiTheme.styleCompactButton(newGameButton);
+
+        rematchButton = new Button("Rematch");
+        rematchButton.setOnAction(event -> rematchHandler.run());
+        GuiTheme.styleCompactButton(rematchButton);
+
+        exitButton = new Button("Exit");
+        exitButton.setOnAction(event -> exitHandler.run());
+        GuiTheme.styleDangerCompactButton(exitButton);
+
+        gridPane.setMinSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
+        gridPane.setPrefSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
+        gridPane.setMaxSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
 
         boardFrame = new StackPane(gridPane);
-        boardFrame.setPadding(new Insets(12));
+        boardFrame.setPadding(new Insets(BOARD_FRAME_PADDING));
+        boardFrame.setMinSize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
+        boardFrame.setPrefSize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
+        boardFrame.setMaxSize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
         boardFrame.setStyle(GuiTheme.boardFrameStyle());
+
+        VBox boardArea = new VBox(12, playerTurn, createScoreCard(), boardFrame);
+        boardArea.setAlignment(Pos.CENTER);
 
         VBox sidebar = createSidebar();
 
         root = new BorderPane();
-        root.setTop(header);
-        root.setCenter(boardFrame);
+        root.setCenter(boardArea);
         root.setRight(sidebar);
         BorderPane.setMargin(sidebar, new Insets(0, 0, 0, 18));
         root.setPadding(new Insets(22));
@@ -162,8 +270,8 @@ public class GameWindow {
     private void createStatusLabels() {
         firstPlayerWallsLabel = createWallsLabel(GuiTheme.playerOne());
         secondPlayerWallsLabel = createWallsLabel(GuiTheme.playerTwo());
-        playerTurn = new Label(firstPlayerDisplayName + "'s turn");
-        GuiTheme.styleTurnLabel(playerTurn, GuiTheme.playerOne());
+        playerTurn = new Label(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
+        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
     }
 
     private Label createWallsLabel(Color color) {
@@ -174,41 +282,68 @@ public class GameWindow {
     }
 
     private VBox createSidebar() {
-        playersTitle = new Label("Players");
-        GuiTheme.styleWindowTitle(playersTitle, 20);
-
         VBox sidebar = new VBox(14,
-                playersTitle,
                 createSecondPlayerCard(),
                 createFirstPlayerCard(),
                 createControlsCard(),
-                createResultCard());
+                createAiThinkingCard());
         sidebar.setAlignment(Pos.TOP_LEFT);
-        sidebar.setMinWidth(180);
+        sidebar.setMinWidth(250);
         return sidebar;
     }
 
-    private VBox createResultCard() {
-        resultTitle = new Label("Result");
-        resultTitle.setTextFill(GuiTheme.text());
-        resultTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+    private HBox createScoreCard() {
+        firstPlayerScoreNameLabel = createScoreNameLabel(scoreFirstPlayerDisplayName, Pos.CENTER_RIGHT);
+        secondPlayerScoreNameLabel = createScoreNameLabel(scoreSecondPlayerDisplayName, Pos.CENTER_LEFT);
+        firstPlayerScoreValueLabel = createScoreValueLabel(scoreFirstPlayerColor());
+        secondPlayerScoreValueLabel = createScoreValueLabel(scoreSecondPlayerColor());
+        scoreDashLabel = new Label("-");
+        scoreDashLabel.setTextFill(GuiTheme.mutedText());
+        scoreDashLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 24));
 
-        winnerLabel = new Label();
-        winnerLabel.setWrapText(true);
-        winnerLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 18));
+        scoreNumbers = new HBox(6, firstPlayerScoreValueLabel, scoreDashLabel, secondPlayerScoreValueLabel);
+        scoreNumbers.setAlignment(Pos.CENTER);
+        scoreNumbers.setMinWidth(110);
+        scoreNumbers.setStyle(GuiTheme.scoreNumbersStyle());
 
-        newGameButton = new Button("New Game");
-        newGameButton.setMaxWidth(Double.MAX_VALUE);
-        newGameButton.setOnAction(event -> newGameHandler.run());
-        GuiTheme.styleCompactButton(newGameButton);
+        scoreCard = new HBox(14, firstPlayerScoreNameLabel, scoreNumbers, secondPlayerScoreNameLabel);
+        scoreCard.setAlignment(Pos.CENTER);
+        scoreCard.setPadding(new Insets(8, 16, 8, 16));
+        scoreCard.setMinWidth(360);
+        scoreCard.setMaxWidth(Double.MAX_VALUE);
+        scoreCard.setStyle(GuiTheme.scoreboardStyle());
+        HBox.setHgrow(firstPlayerScoreNameLabel, Priority.ALWAYS);
+        HBox.setHgrow(secondPlayerScoreNameLabel, Priority.ALWAYS);
+        updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, showScore);
+        return scoreCard;
+    }
 
-        resultCard = new VBox(10, resultTitle, winnerLabel, newGameButton);
-        resultCard.setPadding(new Insets(16));
-        resultCard.setMinWidth(180);
-        resultCard.setStyle(GuiTheme.panelStyle());
-        resultCard.setVisible(false);
-        resultCard.setManaged(false);
-        return resultCard;
+    private Label createScoreNameLabel(String playerName, Pos alignment) {
+        Label label = new Label(playerName);
+        label.setWrapText(true);
+        label.setTextFill(GuiTheme.text());
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 14));
+        label.setAlignment(alignment);
+        label.setMinWidth(110);
+        label.setMaxWidth(Double.MAX_VALUE);
+        return label;
+    }
+
+    private Color scoreFirstPlayerColor() {
+        return scoreFirstPlayerUsesFirstColor ? GuiTheme.playerOne() : GuiTheme.playerTwo();
+    }
+
+    private Color scoreSecondPlayerColor() {
+        return scoreSecondPlayerUsesFirstColor ? GuiTheme.playerOne() : GuiTheme.playerTwo();
+    }
+
+    private Label createScoreValueLabel(Color accentColor) {
+        Label label = new Label();
+        label.setTextFill(accentColor);
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 30));
+        label.setAlignment(Pos.CENTER);
+        label.setMinWidth(30);
+        return label;
     }
 
     private VBox createControlsCard() {
@@ -217,13 +352,105 @@ public class GameWindow {
         controlsTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
 
         undoButton.setMaxWidth(Double.MAX_VALUE);
+        newGameButton.setMaxWidth(Double.MAX_VALUE);
+        rematchButton.setMaxWidth(Double.MAX_VALUE);
+        exitButton.setMaxWidth(Double.MAX_VALUE);
         themeButton.setMaxWidth(Double.MAX_VALUE);
 
-        controlsCard = new VBox(10, controlsTitle, undoButton, themeButton);
+        controlsCard = new VBox(10, controlsTitle, undoButton, newGameButton, rematchButton, exitButton, themeButton);
         controlsCard.setPadding(new Insets(16));
         controlsCard.setMinWidth(180);
         controlsCard.setStyle(GuiTheme.panelStyle());
         return controlsCard;
+    }
+
+    private VBox createAiThinkingCard() {
+        aiThinkingTitle = new Label("Move Time");
+        aiThinkingTitle.setTextFill(GuiTheme.text());
+        aiThinkingTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
+
+        firstPlayerAiThinkingSection = createAiPlayerThinkingSection(
+                firstPlayerDisplayName,
+                GuiTheme.playerOne(),
+                true);
+        secondPlayerAiThinkingSection = createAiPlayerThinkingSection(
+                secondPlayerDisplayName,
+                GuiTheme.playerTwo(),
+                false);
+
+        aiThinkingMetricLabels = createAiThinkingMetricLabels();
+
+        aiThinkingColumns = new HBox(10, secondPlayerAiThinkingSection, aiThinkingMetricLabels, firstPlayerAiThinkingSection);
+        aiThinkingColumns.setAlignment(Pos.TOP_CENTER);
+        HBox.setHgrow(secondPlayerAiThinkingSection, Priority.ALWAYS);
+        HBox.setHgrow(firstPlayerAiThinkingSection, Priority.ALWAYS);
+
+        aiThinkingCard = new VBox(10,
+                aiThinkingTitle,
+                aiThinkingColumns);
+        aiThinkingCard.setPadding(new Insets(16));
+        aiThinkingCard.setMinWidth(250);
+        aiThinkingCard.setStyle(GuiTheme.panelStyle());
+        updateThinkingTime(0, 0, 0, 0, 0, 0);
+        return aiThinkingCard;
+    }
+
+    private VBox createAiPlayerThinkingSection(String playerName, Color accentColor, boolean isFirstPlayer) {
+        Label playerLabel = new Label(playerName);
+        playerLabel.setTextFill(accentColor);
+        playerLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+        playerLabel.setWrapText(true);
+
+        Label lastValueLabel = createAiThinkingValueLabel();
+        Label averageValueLabel = createAiThinkingValueLabel();
+        Label maxValueLabel = createAiThinkingValueLabel();
+
+        if (isFirstPlayer) {
+            firstPlayerAiThinkingNameLabel = playerLabel;
+            firstPlayerAiLastThinkingValueLabel = lastValueLabel;
+            firstPlayerAiAverageThinkingValueLabel = averageValueLabel;
+            firstPlayerAiMaxThinkingValueLabel = maxValueLabel;
+        } else {
+            secondPlayerAiThinkingNameLabel = playerLabel;
+            secondPlayerAiLastThinkingValueLabel = lastValueLabel;
+            secondPlayerAiAverageThinkingValueLabel = averageValueLabel;
+            secondPlayerAiMaxThinkingValueLabel = maxValueLabel;
+        }
+
+        VBox section = new VBox(6, playerLabel, lastValueLabel, averageValueLabel, maxValueLabel);
+        section.setAlignment(Pos.TOP_CENTER);
+        section.setMinWidth(76);
+        section.setMaxWidth(Double.MAX_VALUE);
+        return section;
+    }
+
+    private VBox createAiThinkingMetricLabels() {
+        Label spacer = new Label("");
+        spacer.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+        aiLastThinkingLabel = createAiThinkingMetricLabel("Last");
+        aiAverageThinkingLabel = createAiThinkingMetricLabel("Avg");
+        aiMaxThinkingLabel = createAiThinkingMetricLabel("Max");
+
+        VBox labels = new VBox(6, spacer, aiLastThinkingLabel, aiAverageThinkingLabel, aiMaxThinkingLabel);
+        labels.setAlignment(Pos.TOP_CENTER);
+        labels.setMinWidth(34);
+        return labels;
+    }
+
+    private Label createAiThinkingMetricLabel(String text) {
+        Label label = new Label(text);
+        GuiTheme.styleMutedLabel(label);
+        label.setAlignment(Pos.CENTER);
+        return label;
+    }
+
+    private Label createAiThinkingValueLabel() {
+        Label label = new Label();
+        label.setTextFill(GuiTheme.text());
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 14));
+        label.setAlignment(Pos.CENTER);
+        label.setMinWidth(62);
+        return label;
     }
 
     private VBox createFirstPlayerCard() {
@@ -304,15 +531,15 @@ public class GameWindow {
         boardFrame.setStyle(GuiTheme.boardFrameStyle());
         gridPane.setStyle(GuiTheme.boardStyle());
 
-        GuiTheme.styleWindowTitle(title, 28);
-        GuiTheme.styleWindowTitle(playersTitle, 20);
         Color turnColor = isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        if (resultCard.isVisible()) {
+        if (isGameOver) {
             turnColor = isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
         }
         GuiTheme.styleTurnLabel(playerTurn, turnColor);
-        GuiTheme.styleCompactButton(undoButton);
+        GuiTheme.styleUndoButton(undoButton);
         GuiTheme.styleCompactButton(newGameButton);
+        GuiTheme.styleCompactButton(rematchButton);
+        GuiTheme.styleDangerCompactButton(exitButton);
         GuiTheme.styleThemeButton(themeButton);
 
         firstPlayerWallsLabel.setTextFill(GuiTheme.playerOne());
@@ -320,15 +547,30 @@ public class GameWindow {
         firstPlayerNameLabel.setTextFill(GuiTheme.text());
         secondPlayerNameLabel.setTextFill(GuiTheme.text());
         controlsTitle.setTextFill(GuiTheme.text());
-        resultTitle.setTextFill(GuiTheme.text());
-        if (resultCard.isVisible()) {
-            winnerLabel.setTextFill(isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo());
-        }
+        aiThinkingTitle.setTextFill(GuiTheme.text());
+        firstPlayerAiThinkingNameLabel.setTextFill(GuiTheme.playerOne());
+        secondPlayerAiThinkingNameLabel.setTextFill(GuiTheme.playerTwo());
+        aiLastThinkingLabel.setTextFill(GuiTheme.mutedText());
+        aiAverageThinkingLabel.setTextFill(GuiTheme.mutedText());
+        aiMaxThinkingLabel.setTextFill(GuiTheme.mutedText());
+        firstPlayerAiLastThinkingValueLabel.setTextFill(GuiTheme.text());
+        firstPlayerAiAverageThinkingValueLabel.setTextFill(GuiTheme.text());
+        firstPlayerAiMaxThinkingValueLabel.setTextFill(GuiTheme.text());
+        secondPlayerAiLastThinkingValueLabel.setTextFill(GuiTheme.text());
+        secondPlayerAiAverageThinkingValueLabel.setTextFill(GuiTheme.text());
+        secondPlayerAiMaxThinkingValueLabel.setTextFill(GuiTheme.text());
+        firstPlayerScoreNameLabel.setTextFill(GuiTheme.text());
+        secondPlayerScoreNameLabel.setTextFill(GuiTheme.text());
+        firstPlayerScoreValueLabel.setTextFill(scoreFirstPlayerColor());
+        secondPlayerScoreValueLabel.setTextFill(scoreSecondPlayerColor());
+        scoreDashLabel.setTextFill(GuiTheme.mutedText());
+        scoreNumbers.setStyle(GuiTheme.scoreNumbersStyle());
 
         firstPlayerCard.setStyle(GuiTheme.playerCardStyle(GuiTheme.playerOne()));
         secondPlayerCard.setStyle(GuiTheme.playerCardStyle(GuiTheme.playerTwo()));
         controlsCard.setStyle(GuiTheme.panelStyle());
-        resultCard.setStyle(GuiTheme.panelStyle());
+        aiThinkingCard.setStyle(GuiTheme.panelStyle());
+        scoreCard.setStyle(GuiTheme.scoreboardStyle());
         firstPlayerMarker.setFill(GuiTheme.playerOne());
         secondPlayerMarker.setFill(GuiTheme.playerTwo());
 
@@ -357,8 +599,7 @@ public class GameWindow {
 
     public void redraw(List<Move> moves, int firstPlayerWalls, int secondPlayerWalls, boolean isFirstPlayerTurn) {
         deletePossiblePawnMoves();
-        resultCard.setVisible(false);
-        resultCard.setManaged(false);
+        isGameOver = false;
         gridPane.getChildren().clear();
         boardCells.clear();
         wallLines.clear();
@@ -388,14 +629,14 @@ public class GameWindow {
             drawWall(move);
         }
 
-        boolean firstPlayerMoved = move.getPlayer().getColor() == Color.CYAN;
+        boolean firstPlayerMoved = isBottomPlayer(move.getPlayer());
         isFirstPlayerTurn = !firstPlayerMoved;
         playerTurn.setText(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
         GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
     }
 
     private void drawPawn(Move move) {
-        Circle currentPlayerPawn = move.getPlayer().getColor() == Color.CYAN
+        Circle currentPlayerPawn = isBottomPlayer(move.getPlayer())
                 ? firstPlayerPawn
                 : secondPlayerPawn;
 
@@ -404,10 +645,9 @@ public class GameWindow {
     }
 
     private void drawWall(Move move) {
-        Color playerColor = move.getPlayer().getColor();
         int playerWalls = move.getPlayer().wallsLeft();
 
-        if (playerColor == Color.CYAN) {
+        if (isBottomPlayer(move.getPlayer())) {
             firstPlayerWallsLabel.setText(playerWalls + " walls");
         } else {
             secondPlayerWallsLabel.setText(playerWalls + " walls");
@@ -439,7 +679,7 @@ public class GameWindow {
 
     public void drawPossiblePawnMoves(List<Move> moves) {
         for (Move move : moves) {
-            Color moveColor = move.getPlayer().getColor() == Color.CYAN
+            Color moveColor = isBottomPlayer(move.getPlayer())
                     ? GuiTheme.playerOne()
                     : GuiTheme.playerTwo();
             Circle smallCircle = new Circle(6, moveColor.deriveColor(0, 0.9, 1.2, 0.55));
@@ -478,5 +718,28 @@ public class GameWindow {
         PauseTransition pause = new PauseTransition(javafx.util.Duration.seconds(2));
         pause.setOnFinished(event -> gridPane.getChildren().remove(illegalMoveLabel));
         pause.play();
+    }
+
+    private boolean isBottomPlayer(Player player) {
+        return player.getFinishRow() == 0;
+    }
+
+    private String playerDisplayName(Player player) {
+        return isBottomPlayer(player) ? firstPlayerDisplayName : secondPlayerDisplayName;
+    }
+
+    private String formatThinkingTime(long thinkingTimeNanos) {
+        if (thinkingTimeNanos <= 0) {
+            return "--";
+        }
+
+        double milliseconds = thinkingTimeNanos / 1_000_000.0;
+        if (milliseconds < 10) {
+            return String.format(Locale.US, "%.1f ms", milliseconds);
+        }
+        if (milliseconds < 1000) {
+            return String.format(Locale.US, "%.0f ms", milliseconds);
+        }
+        return String.format(Locale.US, "%.2f s", milliseconds / 1000.0);
     }
 }

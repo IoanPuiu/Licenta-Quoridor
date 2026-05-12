@@ -5,37 +5,38 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import model.PlayerProfile;
 import model.PlayerType;
 
-import java.util.function.BiConsumer;
-
 public class StartWindow {
 
     private static final int SCENE_WIDTH = 500;
-    private static final int SCENE_HEIGHT = 570;
+    private static final int SCENE_HEIGHT = 650;
 
     private final Stage stage;
-    private final BiConsumer<PlayerProfile, PlayerProfile> startGameHandler;
+    private final StartGameHandler startGameHandler;
     private VBox content;
     private VBox setupPanel;
     private Label title;
     private Label firstPlayerLabel;
     private Label secondPlayerLabel;
+    private Label autoRematchesLabel;
     private ComboBox<PlayerType> firstPlayer;
     private ComboBox<PlayerType> secondPlayer;
     private TextField firstPlayerName;
     private TextField secondPlayerName;
+    private Spinner<Integer> autoRematches;
     private Button startButton;
+    private MenuButton themeButton;
 
-    public StartWindow(Stage stage, BiConsumer<PlayerProfile, PlayerProfile> startGameHandler) {
+    public StartWindow(Stage stage, StartGameHandler startGameHandler) {
         this.stage = stage;
         this.startGameHandler = startGameHandler;
     }
@@ -51,6 +52,7 @@ public class StartWindow {
         secondPlayer = createPlayerComboBox("Choose Second Player");
         firstPlayerName = createPlayerNameField("First player name");
         secondPlayerName = createPlayerNameField("Second player name");
+        autoRematches = createAutoRematchesSpinner();
 
         startButton = new Button("Start Match");
         startButton.setDisable(true);
@@ -58,15 +60,18 @@ public class StartWindow {
         GuiTheme.stylePrimaryButton(startButton);
 
         firstPlayer.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) ->
-                updatePlayerNameField(firstPlayer, firstPlayerName));
+                updatePlayerSelection(firstPlayer, firstPlayerName));
         secondPlayer.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) ->
-                updatePlayerNameField(secondPlayer, secondPlayerName));
+                updatePlayerSelection(secondPlayer, secondPlayerName));
         firstPlayerName.textProperty().addListener((obs, oldValue, newValue) -> updateStartButtonState());
         secondPlayerName.textProperty().addListener((obs, oldValue, newValue) -> updateStartButtonState());
 
         startButton.setOnAction(event -> {
             stage.close();
-            startGameHandler.accept(createPlayerProfile(firstPlayer, firstPlayerName), createPlayerProfile(secondPlayer, secondPlayerName));
+            startGameHandler.startGame(
+                    createPlayerProfile(firstPlayer, firstPlayerName),
+                    createPlayerProfile(secondPlayer, secondPlayerName),
+                    automaticRematchCount());
         });
 
         title = new Label("Quoridor");
@@ -74,13 +79,15 @@ public class StartWindow {
 
         firstPlayerLabel = createFieldLabel("First Player");
         secondPlayerLabel = createFieldLabel("Second Player");
-        MenuButton themeButton = GuiTheme.createThemeMenu(this::applyTheme);
+        autoRematchesLabel = createFieldLabel("Auto rematches");
+        updateAutoRematchControls();
+
+        themeButton = GuiTheme.createThemeMenu(this::applyTheme);
         themeButton.setMaxWidth(Double.MAX_VALUE);
 
-        HBox actionRow = new HBox(10, startButton, themeButton);
-        actionRow.setAlignment(Pos.CENTER);
-        HBox.setHgrow(startButton, Priority.ALWAYS);
-        HBox.setHgrow(themeButton, Priority.ALWAYS);
+        VBox actionArea = new VBox(10, startButton, themeButton);
+        actionArea.setAlignment(Pos.CENTER);
+        actionArea.setPadding(new Insets(8, 0, 0, 0));
 
         setupPanel = new VBox(12,
                 firstPlayerLabel,
@@ -89,7 +96,9 @@ public class StartWindow {
                 secondPlayerLabel,
                 secondPlayer,
                 secondPlayerName,
-                actionRow);
+                autoRematchesLabel,
+                autoRematches,
+                actionArea);
         setupPanel.setAlignment(Pos.CENTER_LEFT);
         setupPanel.setPadding(new Insets(28));
         setupPanel.setMaxWidth(360);
@@ -120,23 +129,39 @@ public class StartWindow {
         return textField;
     }
 
+    private Spinner<Integer> createAutoRematchesSpinner() {
+        Spinner<Integer> spinner = new Spinner<>();
+        spinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 100, 0));
+        spinner.setEditable(true);
+        GuiTheme.styleSpinner(spinner);
+        return spinner;
+    }
+
     private void applyTheme() {
         content.setStyle(GuiTheme.rootStyle());
         setupPanel.setStyle(GuiTheme.panelStyle());
         GuiTheme.styleWindowTitle(title, 42);
         GuiTheme.styleMutedLabel(firstPlayerLabel);
         GuiTheme.styleMutedLabel(secondPlayerLabel);
+        GuiTheme.styleMutedLabel(autoRematchesLabel);
         GuiTheme.styleComboBox(firstPlayer);
         GuiTheme.styleComboBox(secondPlayer);
         GuiTheme.styleTextField(firstPlayerName);
         GuiTheme.styleTextField(secondPlayerName);
+        GuiTheme.styleSpinner(autoRematches);
         GuiTheme.stylePrimaryButton(startButton);
+        GuiTheme.styleThemeButton(themeButton);
     }
 
     private Label createFieldLabel(String text) {
         Label label = new Label(text);
         GuiTheme.styleMutedLabel(label);
         return label;
+    }
+
+    private void updatePlayerSelection(ComboBox<PlayerType> playerType, TextField playerName) {
+        updatePlayerNameField(playerType, playerName);
+        updateAutoRematchControls();
     }
 
     private void updatePlayerNameField(ComboBox<PlayerType> playerType, TextField playerName) {
@@ -147,6 +172,17 @@ public class StartWindow {
             playerName.clear();
         }
         updateStartButtonState();
+    }
+
+    private void updateAutoRematchControls() {
+        boolean isAiVsAi = isAI(firstPlayer) && isAI(secondPlayer);
+        autoRematchesLabel.setManaged(isAiVsAi);
+        autoRematchesLabel.setVisible(isAiVsAi);
+        autoRematches.setManaged(isAiVsAi);
+        autoRematches.setVisible(isAiVsAi);
+        if (!isAiVsAi) {
+            autoRematches.getValueFactory().setValue(0);
+        }
     }
 
     private void updateStartButtonState() {
@@ -161,5 +197,29 @@ public class StartWindow {
 
     private PlayerProfile createPlayerProfile(ComboBox<PlayerType> playerType, TextField playerName) {
         return new PlayerProfile(playerType.getValue(), playerName.getText());
+    }
+
+    private int automaticRematchCount() {
+        if (!isAI(firstPlayer) || !isAI(secondPlayer)) {
+            return 0;
+        }
+
+        try {
+            int value = Integer.parseInt(autoRematches.getEditor().getText().trim());
+            value = Math.max(0, Math.min(100, value));
+            autoRematches.getValueFactory().setValue(value);
+            return value;
+        } catch (NumberFormatException e) {
+            return autoRematches.getValue();
+        }
+    }
+
+    private boolean isAI(ComboBox<PlayerType> playerType) {
+        return playerType.getValue() != null && playerType.getValue().isAI();
+    }
+
+    @FunctionalInterface
+    public interface StartGameHandler {
+        void startGame(PlayerProfile firstPlayerProfile, PlayerProfile secondPlayerProfile, int automaticRematches);
     }
 }

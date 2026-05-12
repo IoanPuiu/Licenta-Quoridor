@@ -6,6 +6,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.Background;
@@ -90,6 +91,39 @@ final class GuiTheme {
                 """.formatted(hex(activeTheme.palette.panel()), hex(accentColor));
     }
 
+    static String scoreboardStyle() {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 8;
+                -fx-border-color: %s;
+                -fx-border-radius: 8;
+                -fx-border-width: 2;
+                -fx-effect: dropshadow(gaussian, rgba(38, 48, 44, 0.22), 18, 0.16, 0, 7);
+                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.wall()));
+    }
+
+    static String scoreNumbersStyle() {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1;
+                -fx-padding: 2 12 2 12;
+                """.formatted(hex(activeTheme.palette.inputBackground()), hex(activeTheme.palette.panelBorder()));
+    }
+
+    static String scoreTeamStyle(Color accentColor) {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 0 0 3 0;
+                -fx-padding: 8 6 8 6;
+                """.formatted(hex(activeTheme.palette.inputBackground()), hex(accentColor));
+    }
+
     static String comboBoxStyle() {
         return """
                 -fx-background-color: %s;
@@ -160,6 +194,28 @@ final class GuiTheme {
         button.setOnMouseExited(event -> button.setStyle(compactButtonStyle(activeTheme.palette.primaryButton())));
     }
 
+    static void styleUndoButton(Button button) {
+        button.setMinHeight(38);
+        button.setStyle(compactButtonStyle(activeTheme.palette.undoButton()));
+        button.setOnMouseEntered(event -> {
+            if (!button.isDisabled()) {
+                button.setStyle(compactButtonStyle(activeTheme.palette.undoButtonHover()));
+            }
+        });
+        button.setOnMouseExited(event -> button.setStyle(compactButtonStyle(activeTheme.palette.undoButton())));
+    }
+
+    static void styleDangerCompactButton(Button button) {
+        button.setMinHeight(38);
+        button.setStyle(compactButtonStyle(activeTheme.palette.danger()));
+        button.setOnMouseEntered(event -> {
+            if (!button.isDisabled()) {
+                button.setStyle(compactButtonStyle(activeTheme.palette.danger().deriveColor(0, 1, 0.82, 1)));
+            }
+        });
+        button.setOnMouseExited(event -> button.setStyle(compactButtonStyle(activeTheme.palette.danger())));
+    }
+
     static void styleThemeButton(MenuButton button) {
         button.setMinHeight(38);
         button.setStyle(themeButtonStyle(activeTheme.palette.themeButton()));
@@ -177,6 +233,13 @@ final class GuiTheme {
         textField.setPrefWidth(280);
         textField.setMinHeight(38);
         textField.setStyle(comboBoxStyle());
+    }
+
+    static void styleSpinner(Spinner<?> spinner) {
+        spinner.setPrefWidth(280);
+        spinner.setMinHeight(38);
+        spinner.setStyle(comboBoxStyle());
+        spinner.getEditor().setStyle(comboBoxStyle());
     }
 
     static void styleWindowTitle(Label label, int size) {
@@ -275,6 +338,8 @@ final class GuiTheme {
                 Color.web("#F43F5E"),
                 Color.web("#2F7D68"),
                 Color.web("#256B59"),
+                Color.web("#8B7352"),
+                Color.web("#A0865F"),
                 Color.web("#EFE7D8"),
                 Color.web("#E6D7BE"),
                 Color.web("#D64545"))),
@@ -297,6 +362,8 @@ final class GuiTheme {
                 Color.web("#16A34A"),
                 Color.web("#B85C47"),
                 Color.web("#9E4D3D"),
+                Color.web("#8A6FA8"),
+                Color.web("#9E82BD"),
                 Color.web("#F5E2D4"),
                 Color.web("#EBCDBB"),
                 Color.web("#B4233A"))),
@@ -319,6 +386,8 @@ final class GuiTheme {
                 Color.web("#F59E0B"),
                 Color.web("#237A78"),
                 Color.web("#1D6564"),
+                Color.web("#4F8391"),
+                Color.web("#6099A8"),
                 Color.web("#E2F0EE"),
                 Color.web("#CBE1DE"),
                 Color.web("#C2413B")));
@@ -351,6 +420,8 @@ final class GuiTheme {
             Color playerTwo,
             Color primaryButton,
             Color primaryButtonHover,
+            Color undoButton,
+            Color undoButtonHover,
             Color themeButton,
             Color themeButtonHover,
             Color danger) {

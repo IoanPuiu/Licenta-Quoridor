@@ -1,10 +1,10 @@
 package AI;
 
-import javafx.scene.paint.Color;
 import model.Board;
 import model.Move;
 import model.MoveType;
 import model.Player;
+import model.PlayerType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -14,8 +14,8 @@ public class GameStateTest {
     @Test
     public void constructorFromBoardPlayersAndOpponentBuildsExpectedState() {
         Board board = new Board(9);
-        Player playerInTurn = new Player("First Player", false, 8, 4, 0, Color.CYAN);
-        Player opponent = new Player("Second Player", false, 0, 4, 8, Color.ORANGE);
+        Player playerInTurn = new Player(PlayerType.HUMAN, 8, 4, 0);
+        Player opponent = new Player(PlayerType.HUMAN, 0, 4, 8);
         board.getOneCell(playerInTurn.getRow(), playerInTurn.getCol()).setPlayer(playerInTurn);
         board.getOneCell(opponent.getRow(), opponent.getCol()).setPlayer(opponent);
 
@@ -41,8 +41,8 @@ public class GameStateTest {
     @Test
     public void constructorKeepsWallCodeZeroDistinctFromEmptyWallSlots() {
         Board board = new Board(9);
-        Player playerInTurn = new Player("First Player", false, 8, 4, 0, Color.CYAN);
-        Player opponent = new Player("Second Player", false, 0, 4, 8, Color.ORANGE);
+        Player playerInTurn = new Player(PlayerType.HUMAN, 8, 4, 0);
+        Player opponent = new Player(PlayerType.HUMAN, 0, 4, 8);
         board.getOneCell(playerInTurn.getRow(), playerInTurn.getCol()).setPlayer(playerInTurn);
         board.getOneCell(opponent.getRow(), opponent.getCol()).setPlayer(opponent);
 
@@ -65,8 +65,8 @@ public class GameStateTest {
     @Test
     public void constructorStoresCurrentPlayerFinishRowWhenItIsBottomRow() {
         Board board = new Board(9);
-        Player playerInTurn = new Player("Second Player", false, 0, 4, 8, Color.ORANGE);
-        Player opponent = new Player("First Player", false, 8, 4, 0, Color.CYAN);
+        Player playerInTurn = new Player(PlayerType.HUMAN, 0, 4, 8);
+        Player opponent = new Player(PlayerType.HUMAN, 8, 4, 0);
         board.getOneCell(playerInTurn.getRow(), playerInTurn.getCol()).setPlayer(playerInTurn);
         board.getOneCell(opponent.getRow(), opponent.getCol()).setPlayer(opponent);
 
