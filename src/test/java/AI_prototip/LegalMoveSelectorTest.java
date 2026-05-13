@@ -1,4 +1,4 @@
-package AI;
+package AI_prototip;
 
 import org.junit.jupiter.api.Test;
 

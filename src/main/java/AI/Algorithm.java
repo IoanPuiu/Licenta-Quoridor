@@ -1,21 +1,28 @@
 package AI;
 
-import model.PlayerType;
+import PerformanceModel.GameState;
 
-public class Algorithm {
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
-    private static final int MTCS_EASY_DEPTH = 10_000;
-    private static final int MTCS_MEDIUM_DEPTH = 30_000;
-    private static final int MTCS_HARD_DEPTH = 60_000;
+public interface Algorithm {
+    int generateMove(GameState state);
 
-    public int generateMove(GameState state, PlayerType aiType) {
-        return switch (aiType) {
-            case MINIMAX -> new MiniMax(state).generateMove();
-            case MTCS_EASY -> new Mtcs(state, MTCS_EASY_DEPTH).generateMove();
-            case MTCS_MEDIUM -> new Mtcs(state, MTCS_MEDIUM_DEPTH).generateMove();
-            case MTCS_HARD -> new Mtcs(state, MTCS_HARD_DEPTH).generateMove();
-            case GYM_PYTHON -> new GymPython(state).generateMove();
-            case HUMAN -> throw new IllegalArgumentException("Algorithm cannot generate a move for a human player.");
-        };
+    default int randomValidMove(GameState state) {
+        Set<Integer> legalMoves = state.getAllPossibleMoveCodes();
+        if (legalMoves.isEmpty()) {
+            throw new IllegalStateException("No legal moves available.");
+        }
+
+        int selectedIndex = ThreadLocalRandom.current().nextInt(legalMoves.size());
+        int currentIndex = 0;
+        for (int move : legalMoves) {
+            if (currentIndex == selectedIndex) {
+                return move;
+            }
+            currentIndex++;
+        }
+
+        throw new IllegalStateException("Could not select a legal move.");
     }
 }

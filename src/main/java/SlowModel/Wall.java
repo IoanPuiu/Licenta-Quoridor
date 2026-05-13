@@ -1,4 +1,4 @@
-package model;
+package SlowModel;
 
 import java.util.HashSet;
 import java.util.Set;

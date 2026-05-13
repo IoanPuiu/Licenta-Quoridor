@@ -1,15 +1,16 @@
 package GUI;
 
+import PerformanceModel.PerformanceGameController;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-import model.Game;
-import model.Move;
-import model.Player;
-import model.PlayerProfile;
-import model.ThinkingStats;
+import SlowModel.Game;
+import SlowModel.Move;
+import SlowModel.Player;
+import SlowModel.PlayerProfile;
+import SlowModel.ThinkingStats;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -22,6 +23,7 @@ public class GameUI extends Application {
     private volatile int boardY;
     private GameWindow gameWindow;
     private Game currentGame;
+    private PerformanceGameController currentPerformanceGame;
     private PlayerProfile firstPlayerProfile;
     private PlayerProfile secondPlayerProfile;
     private PlayerProfile scoreFirstPlayerProfile;
@@ -105,7 +107,32 @@ public class GameUI extends Application {
         gameWindow.show();
         updateThinkingTimeDisplay();
 
-        currentGame = new Game(this, firstPlayerProfile.playerType(), secondPlayerProfile.playerType(), gameToken, isFirstPlayerStarting);
+        startController(firstPlayerProfile, secondPlayerProfile, gameToken, isFirstPlayerStarting);
+    }
+
+    private void startController(
+            PlayerProfile firstPlayerProfile,
+            PlayerProfile secondPlayerProfile,
+            int gameToken,
+            boolean isFirstPlayerStarting) {
+        currentGame = null;
+        currentPerformanceGame = null;
+
+        if (isAiVsAi(firstPlayerProfile, secondPlayerProfile)) {
+            currentPerformanceGame = new PerformanceGameController(
+                    this,
+                    firstPlayerProfile.playerType().name(),
+                    secondPlayerProfile.playerType().name(),
+                    gameToken,
+                    isFirstPlayerStarting);
+        } else {
+            currentGame = new Game(
+                    this,
+                    firstPlayerProfile.playerType(),
+                    secondPlayerProfile.playerType(),
+                    gameToken,
+                    isFirstPlayerStarting);
+        }
     }
 
     private void resetInputState() {
@@ -152,6 +179,12 @@ public class GameUI extends Application {
     public void draw(int gameToken, Move move) {
         if (isActiveGame(gameToken)) {
             draw(move);
+        }
+    }
+
+    public void drawPerformanceMove(int gameToken, int moveCode, boolean isPlayerAMove, int wallsLeft) {
+        if (isActiveGame(gameToken)) {
+            gameWindow.drawPerformanceMove(moveCode, isPlayerAMove, wallsLeft);
         }
     }
 
@@ -208,6 +241,15 @@ public class GameUI extends Application {
         }
     }
 
+    public void recordPerformanceMoveTime(int gameToken, boolean isPlayerAMove, long thinkingTimeNanos) {
+        if (!isActiveGame(gameToken)) {
+            return;
+        }
+
+        currentGameThinkingStats = appendThinkingTime(currentGameThinkingStats, isPlayerAMove, thinkingTimeNanos);
+        updateThinkingTimeDisplay();
+    }
+
     public void endGame(Player player) {
         recordGameResult(activeGameToken, player);
     }
@@ -215,6 +257,12 @@ public class GameUI extends Application {
     public void endGame(int gameToken, Player player) {
         if (isActiveGame(gameToken)) {
             recordGameResult(gameToken, player);
+        }
+    }
+
+    public void endPerformanceGame(int gameToken, boolean isPlayerAWinner) {
+        if (isActiveGame(gameToken)) {
+            recordPerformanceGameResult(gameToken, isPlayerAWinner);
         }
     }
 
@@ -240,6 +288,11 @@ public class GameUI extends Application {
             if (winner != null) {
                 recordGameResult(activeGameToken, winner);
             }
+        } else if (currentPerformanceGame != null) {
+            Boolean isPlayerAWinner = currentPerformanceGame.forfeitCurrentPlayer();
+            if (isPlayerAWinner != null) {
+                recordPerformanceGameResult(activeGameToken, isPlayerAWinner);
+            }
         }
 
         boolean nextIsFirstPlayerStarting = !isFirstPlayerStarting;
@@ -258,6 +311,10 @@ public class GameUI extends Application {
         if (currentGame != null) {
             currentGame.stop();
             currentGame = null;
+        }
+        if (currentPerformanceGame != null) {
+            currentPerformanceGame.stop();
+            currentPerformanceGame = null;
         }
         activeGameToken++;
         resetInputState();
@@ -348,6 +405,30 @@ public class GameUI extends Application {
                 Math.max(previousStats.topMaxNanos(), currentStats.topMaxNanos()));
     }
 
+    private ThinkingStats appendThinkingTime(ThinkingStats stats, boolean isPlayerAMove, long thinkingTimeNanos) {
+        if (isPlayerAMove) {
+            return new ThinkingStats(
+                    thinkingTimeNanos,
+                    stats.bottomTotalNanos() + thinkingTimeNanos,
+                    stats.bottomMoveCount() + 1,
+                    Math.max(stats.bottomMaxNanos(), thinkingTimeNanos),
+                    stats.topLastMoveNanos(),
+                    stats.topTotalNanos(),
+                    stats.topMoveCount(),
+                    stats.topMaxNanos());
+        }
+
+        return new ThinkingStats(
+                stats.bottomLastMoveNanos(),
+                stats.bottomTotalNanos(),
+                stats.bottomMoveCount(),
+                stats.bottomMaxNanos(),
+                thinkingTimeNanos,
+                stats.topTotalNanos() + thinkingTimeNanos,
+                stats.topMoveCount() + 1,
+                Math.max(stats.topMaxNanos(), thinkingTimeNanos));
+    }
+
     private void recordGameResult(int gameToken, Player winner) {
         PlayerProfile winnerProfile = winnerProfile(winner);
         if (scoredGameToken != gameToken) {
@@ -357,6 +438,18 @@ public class GameUI extends Application {
         }
 
         gameWindow.showGameResult(winner, scoreFirstPlayerWins, scoreSecondPlayerWins);
+        scheduleAutomaticRematch(gameToken);
+    }
+
+    private void recordPerformanceGameResult(int gameToken, boolean isPlayerAWinner) {
+        PlayerProfile winnerProfile = isPlayerAWinner ? firstPlayerProfile : secondPlayerProfile;
+        if (scoredGameToken != gameToken) {
+            addWin(winnerProfile);
+            scoredGameToken = gameToken;
+            scoredWinnerProfile = winnerProfile;
+        }
+
+        gameWindow.showPerformanceGameResult(isPlayerAWinner, scoreFirstPlayerWins, scoreSecondPlayerWins);
         scheduleAutomaticRematch(gameToken);
     }
 
@@ -443,7 +536,7 @@ public class GameUI extends Application {
         gameWindow.setUndoAvailable(false);
         updateThinkingTimeDisplay();
 
-        currentGame = new Game(this, firstPlayerProfile.playerType(), secondPlayerProfile.playerType(), gameToken, nextIsFirstPlayerStarting);
+        startController(firstPlayerProfile, secondPlayerProfile, gameToken, nextIsFirstPlayerStarting);
     }
 
     private void cancelAutomaticRematchDelay() {

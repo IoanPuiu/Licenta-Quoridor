@@ -1,4 +1,4 @@
-package model;
+package SlowModel;
 
 import org.junit.jupiter.api.Test;
 

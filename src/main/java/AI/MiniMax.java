@@ -1,14 +1,10 @@
 package AI;
 
-public class MiniMax {
+import PerformanceModel.GameState;
 
-    GameState state;
-
-    public MiniMax(GameState state) {
-        this.state = state;
-    }
-
-    public int generateMove() {
-        return LegalMoveSelector.firstLegalMove(state);
+public class MiniMax implements Algorithm{
+    @Override
+    public int generateMove(GameState state) {
+        return randomValidMove(state);
     }
 }

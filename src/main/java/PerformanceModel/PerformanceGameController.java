@@ -1,0 +1,210 @@
+package PerformanceModel;
+
+import AI.Algorithm;
+import AI.GymPython;
+import AI.MiniMax;
+import AI.Mtcs;
+import GUI.GameUI;
+import javafx.application.Platform;
+
+import java.util.Locale;
+
+public class PerformanceGameController {
+
+    private final Object gameLock = new Object();
+    private final GameUI gui;
+    private final int uiToken;
+
+    private final GameState state;
+    private Algorithm algCurrent;
+    private Algorithm algOpponent;
+    private Thread gameThread;
+    private boolean isCurrentPlayerA;
+    private boolean gameOver;
+    private Boolean winnerIsPlayerA;
+
+    public PerformanceGameController(GameUI gui, String playerAType, String playerBType) {
+        this(gui, playerAType, playerBType, 0, true);
+    }
+
+    public PerformanceGameController(
+            GameUI gui,
+            String playerAType,
+            String playerBType,
+            int uiToken,
+            boolean isPlayerAStarting) {
+        this.gui = gui;
+        this.uiToken = uiToken;
+        Algorithm playerAAlgorithm = initAlg(playerAType);
+        Algorithm playerBAlgorithm = initAlg(playerBType);
+        this.state = new GameState(isPlayerAStarting);
+        this.isCurrentPlayerA = isPlayerAStarting;
+        this.algCurrent = isPlayerAStarting ? playerAAlgorithm : playerBAlgorithm;
+        this.algOpponent = isPlayerAStarting ? playerBAlgorithm : playerAAlgorithm;
+        this.gameOver = false;
+        this.winnerIsPlayerA = null;
+
+        play();
+    }
+
+    public void stop() {
+        Thread threadToInterrupt;
+        synchronized (gameLock) {
+            gameOver = true;
+            threadToInterrupt = gameThread;
+        }
+
+        if (threadToInterrupt != null) {
+            threadToInterrupt.interrupt();
+        }
+    }
+
+    public Boolean forfeitCurrentPlayer() {
+        Thread threadToInterrupt;
+        boolean forfeitureWinnerIsPlayerA;
+        synchronized (gameLock) {
+            if (winnerIsPlayerA != null) {
+                return winnerIsPlayerA;
+            }
+            if (gameOver) {
+                return null;
+            }
+
+            forfeitureWinnerIsPlayerA = !isCurrentPlayerA;
+            winnerIsPlayerA = forfeitureWinnerIsPlayerA;
+            gameOver = true;
+            threadToInterrupt = gameThread;
+        }
+
+        if (threadToInterrupt != null) {
+            threadToInterrupt.interrupt();
+        }
+        return forfeitureWinnerIsPlayerA;
+    }
+
+    private void play() {
+        Thread thread = new Thread(this::runGameLoop);
+        thread.setDaemon(true);
+
+        synchronized (gameLock) {
+            gameThread = thread;
+        }
+        thread.start();
+    }
+
+    private void runGameLoop() {
+        try {
+            while (!Thread.currentThread().isInterrupted()) {
+                Algorithm algorithm;
+                synchronized (gameLock) {
+                    if (gameOver) {
+                        break;
+                    }
+                    algorithm = algCurrent;
+                }
+
+                long thinkingStartedAt = System.nanoTime();
+                int move = algorithm.generateMove(state);
+                long thinkingTimeNanos = System.nanoTime() - thinkingStartedAt;
+
+                MoveResult result;
+                synchronized (gameLock) {
+                    if (gameOver) {
+                        break;
+                    }
+
+                    boolean playerAMoved = isCurrentPlayerA;
+                    int wallsAfterMove = wallsAfterMove(move);
+                    boolean winningMove = isWinningMove(move);
+
+                    if (winningMove) {
+                        gameOver = true;
+                        winnerIsPlayerA = playerAMoved;
+                    } else {
+                        state.update(move);
+                        swapPlayers();
+                    }
+
+                    result = new MoveResult(move, playerAMoved, wallsAfterMove, thinkingTimeNanos, winningMove);
+                }
+
+                sendMoveToGui(result);
+                if (result.winningMove()) {
+                    sendWinnerToGui(result.playerAMoved());
+                    break;
+                }
+            }
+        } finally {
+            synchronized (gameLock) {
+                if (gameThread == Thread.currentThread()) {
+                    gameThread = null;
+                }
+            }
+        }
+    }
+
+    private Algorithm initAlg(String playerType) {
+        return switch (normalizedPlayerType(playerType)) {
+            case "MINIMAX" -> new MiniMax();
+            case "MTCS_EASY" -> new Mtcs(10000);
+            case "MTCS_MEDIUM" -> new Mtcs(30000);
+            case "MTCS_HARD" -> new Mtcs(60000);
+            case "GYM_PYTHON" -> new GymPython();
+            case "HUMAN" -> throw new IllegalArgumentException("Performance controller supports only AI players.");
+            default -> throw new IllegalArgumentException("Unknown AI player type: " + playerType);
+        };
+    }
+
+    private String normalizedPlayerType(String playerType) {
+        if (playerType == null) {
+            throw new IllegalArgumentException("Player type cannot be null.");
+        }
+        return playerType.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+    }
+
+    private int wallsAfterMove(int move) {
+        if (GameState.isPawnMoveCode(move)) {
+            return state.getCurrPlayerWalls();
+        }
+        return state.getCurrPlayerWalls() - 1;
+    }
+
+    private boolean isWinningMove(int move) {
+        return GameState.isPawnMoveCode(move)
+                && GameState.decodePawnMoveRow(move) == state.getCurrPlayerFinishLine();
+    }
+
+    private void swapPlayers() {
+        Algorithm previousCurrentAlgorithm = algCurrent;
+        algCurrent = algOpponent;
+        algOpponent = previousCurrentAlgorithm;
+        isCurrentPlayerA = !isCurrentPlayerA;
+    }
+
+    private void sendMoveToGui(MoveResult result) {
+        Platform.runLater(() -> {
+            gui.drawPerformanceMove(
+                    uiToken,
+                    result.move(),
+                    result.playerAMoved(),
+                    result.wallsAfterMove());
+            gui.recordPerformanceMoveTime(
+                    uiToken,
+                    result.playerAMoved(),
+                    result.thinkingTimeNanos());
+        });
+    }
+
+    private void sendWinnerToGui(boolean isPlayerAWinner) {
+        Platform.runLater(() -> gui.endPerformanceGame(uiToken, isPlayerAWinner));
+    }
+
+    private record MoveResult(
+            int move,
+            boolean playerAMoved,
+            int wallsAfterMove,
+            long thinkingTimeNanos,
+            boolean winningMove) {
+    }
+
+}

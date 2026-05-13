@@ -1,9 +1,9 @@
-package AI;
+package AI_prototip;
 
-import model.Board;
-import model.Cell;
-import model.Player;
-import model.Wall;
+import SlowModel.Board;
+import SlowModel.Cell;
+import SlowModel.Player;
+import SlowModel.Wall;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;

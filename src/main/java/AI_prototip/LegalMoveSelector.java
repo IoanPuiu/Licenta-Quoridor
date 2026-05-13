@@ -1,4 +1,4 @@
-package AI;
+package AI_prototip;
 
 import java.util.ArrayList;
 import java.util.Collections;

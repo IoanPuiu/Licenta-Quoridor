@@ -1,4 +1,4 @@
-package model;
+package SlowModel;
 
 public class Move {
     private final Player player;

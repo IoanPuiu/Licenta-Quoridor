@@ -1,5 +1,6 @@
 package GUI;
 
+import PerformanceModel.GameState;
 import javafx.animation.PauseTransition;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -27,9 +28,9 @@ import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.stage.Stage;
-import model.Move;
-import model.MoveType;
-import model.Player;
+import SlowModel.Move;
+import SlowModel.MoveType;
+import SlowModel.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -179,6 +180,15 @@ public class GameWindow {
         isFirstPlayerWinner = isBottomPlayer(winner);
         Color winnerColor = isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
         playerTurn.setText("Game over - " + playerDisplayName(winner) + " won");
+        GuiTheme.styleTurnLabel(playerTurn, winnerColor);
+        updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, true);
+    }
+
+    public void showPerformanceGameResult(boolean isPlayerAWinner, int scoreFirstPlayerWins, int scoreSecondPlayerWins) {
+        isGameOver = true;
+        this.isFirstPlayerWinner = isPlayerAWinner;
+        Color winnerColor = isPlayerAWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
+        playerTurn.setText("Game over - " + playerDisplayName(isPlayerAWinner) + " won");
         GuiTheme.styleTurnLabel(playerTurn, winnerColor);
         updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, true);
     }
@@ -635,6 +645,18 @@ public class GameWindow {
         GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
     }
 
+    public void drawPerformanceMove(int moveCode, boolean isPlayerAMove, int wallsLeft) {
+        if (GameState.isPawnMoveCode(moveCode)) {
+            drawPerformancePawn(moveCode, isPlayerAMove);
+        } else {
+            drawPerformanceWall(moveCode, isPlayerAMove, wallsLeft);
+        }
+
+        isFirstPlayerTurn = !isPlayerAMove;
+        playerTurn.setText(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
+        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
+    }
+
     private void drawPawn(Move move) {
         Circle currentPlayerPawn = isBottomPlayer(move.getPlayer())
                 ? firstPlayerPawn
@@ -642,6 +664,16 @@ public class GameWindow {
 
         gridPane.getChildren().remove(currentPlayerPawn);
         gridPane.add(currentPlayerPawn, move.getTargetCol(), move.getTargetRow());
+    }
+
+    private void drawPerformancePawn(int moveCode, boolean isPlayerAMove) {
+        Circle currentPlayerPawn = isPlayerAMove ? firstPlayerPawn : secondPlayerPawn;
+
+        gridPane.getChildren().remove(currentPlayerPawn);
+        gridPane.add(
+                currentPlayerPawn,
+                GameState.decodePawnMoveCol(moveCode),
+                GameState.decodePawnMoveRow(moveCode));
     }
 
     private void drawWall(Move move) {
@@ -661,6 +693,24 @@ public class GameWindow {
                 : move.getTargetRow() * CELL_WITH_STROKE + 15;
         int x2 = move.isHorizontal() ? x1 + 80 : x1;
         int y2 = move.isHorizontal() ? y1 : y1 + 80;
+
+        drawLine(x1, x2, y1, y2);
+    }
+
+    private void drawPerformanceWall(int moveCode, boolean isPlayerAMove, int wallsLeft) {
+        if (isPlayerAMove) {
+            firstPlayerWallsLabel.setText(wallsLeft + " walls");
+        } else {
+            secondPlayerWallsLabel.setText(wallsLeft + " walls");
+        }
+
+        int row = GameState.decodeWallRow(moveCode);
+        int col = GameState.decodeWallCol(moveCode);
+        boolean isHorizontal = GameState.decodeWallIsHorizontal(moveCode);
+        int x1 = isHorizontal ? col * CELL_WITH_STROKE + 15 : col * CELL_WITH_STROKE + 56;
+        int y1 = isHorizontal ? row * CELL_WITH_STROKE + 56 : row * CELL_WITH_STROKE + 15;
+        int x2 = isHorizontal ? x1 + 80 : x1;
+        int y2 = isHorizontal ? y1 : y1 + 80;
 
         drawLine(x1, x2, y1, y2);
     }
@@ -726,6 +776,10 @@ public class GameWindow {
 
     private String playerDisplayName(Player player) {
         return isBottomPlayer(player) ? firstPlayerDisplayName : secondPlayerDisplayName;
+    }
+
+    private String playerDisplayName(boolean isPlayerA) {
+        return isPlayerA ? firstPlayerDisplayName : secondPlayerDisplayName;
     }
 
     private String formatThinkingTime(long thinkingTimeNanos) {

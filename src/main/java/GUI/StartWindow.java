@@ -12,8 +12,8 @@ import javafx.scene.control.MenuButton;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import model.PlayerProfile;
-import model.PlayerType;
+import SlowModel.PlayerProfile;
+import SlowModel.PlayerType;
 
 public class StartWindow {
 

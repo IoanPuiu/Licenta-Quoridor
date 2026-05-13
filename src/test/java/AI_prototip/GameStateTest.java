@@ -1,10 +1,10 @@
-package AI;
+package AI_prototip;
 
-import model.Board;
-import model.Move;
-import model.MoveType;
-import model.Player;
-import model.PlayerType;
+import SlowModel.Board;
+import SlowModel.Move;
+import SlowModel.MoveType;
+import SlowModel.Player;
+import SlowModel.PlayerType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;

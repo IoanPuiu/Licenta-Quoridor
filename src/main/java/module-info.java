@@ -6,6 +6,7 @@ module GUI {
 
     opens GUI to javafx.fxml;
     exports GUI to javafx.graphics;
-    exports model;
+    exports SlowModel;
+    exports AI_prototip;
     exports AI;
 }

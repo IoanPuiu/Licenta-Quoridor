@@ -1,7 +1,7 @@
-package model;
+package SlowModel;
 
-import AI.Algorithm;
-import AI.GameState;
+import AI_prototip.AlgorithmAI;
+import AI_prototip.GameState;
 import GUI.GameUI;
 import javafx.application.Platform;
 
@@ -24,7 +24,7 @@ public class Game {
     private boolean gameLoopRunning;
     private Player winner;
 
-    private final Algorithm algorithm;
+    private final AlgorithmAI algorithm;
 
     public Game(GameUI gui, PlayerType bottomPlayerType, PlayerType topPlayerType) {
         this(gui, bottomPlayerType, topPlayerType, 0, true);
@@ -54,7 +54,7 @@ public class Game {
         board.setSecondPlayer(topPlayer);
         currentPlayer = isBottomPlayerStarting ? bottomPlayer : topPlayer;
         opponent = isBottomPlayerStarting ? topPlayer : bottomPlayer;
-        algorithm = new Algorithm();
+        algorithm = new AlgorithmAI();
         moveHistory = new ArrayList<>();
         thinkingTimes = new ArrayList<>();
         stateVersion = 0;
