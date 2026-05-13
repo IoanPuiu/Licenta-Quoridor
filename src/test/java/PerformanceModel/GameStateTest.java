@@ -117,6 +117,23 @@ class GameStateTest {
     }
 
     @Test
+    void wallImpactMatchesShortestPathDistanceChanges() {
+        GameState gameState = new GameState();
+        int wallCode = 120;
+        int currentPlayerDistanceBefore = gameState.getCurrentPlayerDistanceToFinish();
+        int opponentDistanceBefore = gameState.getOpponentDistanceToFinish();
+
+        int impact = gameState.wallImpact(wallCode);
+        gameState.update(wallCode);
+
+        int opponentDistanceAfter = gameState.getCurrentPlayerDistanceToFinish();
+        int currentPlayerDistanceAfter = gameState.getOpponentDistanceToFinish();
+        int movesAddedToOpponent = opponentDistanceAfter - opponentDistanceBefore;
+        int movesAddedToCurrentPlayer = currentPlayerDistanceAfter - currentPlayerDistanceBefore;
+        assertEquals(movesAddedToOpponent - movesAddedToCurrentPlayer, impact);
+    }
+
+    @Test
     void distanceGettersUseUpdatedPawnPositionsAfterPawnMoveComplex() {
         GameState gameState = new GameState();
 

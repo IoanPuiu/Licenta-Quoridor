@@ -5,6 +5,8 @@ import AI.GymPython;
 import AI.MiniMax;
 import AI.Mtcs;
 import GUI.GameUI;
+import SlowModel.PlayerProfile;
+import SlowModel.PlayerType;
 import javafx.application.Platform;
 
 import java.util.Locale;
@@ -33,10 +35,24 @@ public class PerformanceGameController {
             String playerBType,
             int uiToken,
             boolean isPlayerAStarting) {
+        this(
+                gui,
+                profileFromTypeName(playerAType),
+                profileFromTypeName(playerBType),
+                uiToken,
+                isPlayerAStarting);
+    }
+
+    public PerformanceGameController(
+            GameUI gui,
+            PlayerProfile playerAProfile,
+            PlayerProfile playerBProfile,
+            int uiToken,
+            boolean isPlayerAStarting) {
         this.gui = gui;
         this.uiToken = uiToken;
-        Algorithm playerAAlgorithm = initAlg(playerAType);
-        Algorithm playerBAlgorithm = initAlg(playerBType);
+        Algorithm playerAAlgorithm = initAlg(playerAProfile);
+        Algorithm playerBAlgorithm = initAlg(playerBProfile);
         this.state = new GameState(isPlayerAStarting);
         this.isCurrentPlayerA = isPlayerAStarting;
         this.algCurrent = isPlayerAStarting ? playerAAlgorithm : playerBAlgorithm;
@@ -114,6 +130,8 @@ public class PerformanceGameController {
                     }
 
                     boolean playerAMoved = isCurrentPlayerA;
+                    boolean includeInAverage = state.getCurrPlayerWalls() > 0;
+                    int wallImpact = GameState.isPawnMoveCode(move) ? 0 : state.wallImpact(move);
                     int wallsAfterMove = wallsAfterMove(move);
                     boolean winningMove = isWinningMove(move);
 
@@ -125,7 +143,14 @@ public class PerformanceGameController {
                         swapPlayers();
                     }
 
-                    result = new MoveResult(move, playerAMoved, wallsAfterMove, thinkingTimeNanos, winningMove);
+                    result = new MoveResult(
+                            move,
+                            playerAMoved,
+                            wallsAfterMove,
+                            thinkingTimeNanos,
+                            includeInAverage,
+                            wallImpact,
+                            winningMove);
                 }
 
                 sendMoveToGui(result);
@@ -133,6 +158,7 @@ public class PerformanceGameController {
                     sendWinnerToGui(result.playerAMoved());
                     break;
                 }
+                gui.pauseAfterFastMoveIfEnabled(uiToken, result.thinkingTimeNanos());
             }
         } finally {
             synchronized (gameLock) {
@@ -143,19 +169,22 @@ public class PerformanceGameController {
         }
     }
 
-    private Algorithm initAlg(String playerType) {
-        return switch (normalizedPlayerType(playerType)) {
-            case "MINIMAX" -> new MiniMax();
-            case "MTCS_EASY" -> new Mtcs(10000);
-            case "MTCS_MEDIUM" -> new Mtcs(30000);
-            case "MTCS_HARD" -> new Mtcs(60000);
-            case "GYM_PYTHON" -> new GymPython();
-            case "HUMAN" -> throw new IllegalArgumentException("Performance controller supports only AI players.");
-            default -> throw new IllegalArgumentException("Unknown AI player type: " + playerType);
+    private Algorithm initAlg(PlayerProfile playerProfile) {
+        return switch (playerProfile.playerType()) {
+            case MINIMAX -> new MiniMax(
+                    playerProfile.minimaxDepth(),
+                    playerProfile.minimaxMoveOrdering());
+            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD -> new Mtcs(playerProfile.mtcsDepth());
+            case GYM_PYTHON -> new GymPython();
+            case HUMAN -> throw new IllegalArgumentException("Performance controller supports only AI players.");
         };
     }
 
-    private String normalizedPlayerType(String playerType) {
+    private static PlayerProfile profileFromTypeName(String playerType) {
+        return new PlayerProfile(PlayerType.valueOf(normalizedPlayerType(playerType)), "");
+    }
+
+    private static String normalizedPlayerType(String playerType) {
         if (playerType == null) {
             throw new IllegalArgumentException("Player type cannot be null.");
         }
@@ -191,7 +220,9 @@ public class PerformanceGameController {
             gui.recordPerformanceMoveTime(
                     uiToken,
                     result.playerAMoved(),
-                    result.thinkingTimeNanos());
+                    result.includeInAverage(),
+                    result.thinkingTimeNanos(),
+                    result.wallImpact());
         });
     }
 
@@ -204,6 +235,8 @@ public class PerformanceGameController {
             boolean playerAMoved,
             int wallsAfterMove,
             long thinkingTimeNanos,
+            boolean includeInAverage,
+            int wallImpact,
             boolean winningMove) {
     }
 

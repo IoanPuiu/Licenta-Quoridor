@@ -52,6 +52,19 @@ public class GameState {
         }
     }
 
+    public GameState(GameState other) {
+        currPlayerPos = other.currPlayerPos;
+        opponentPos = other.opponentPos;
+        currPlayerWalls = other.currPlayerWalls;
+        opponentWalls = other.opponentWalls;
+        currPlayerFinishLine = other.currPlayerFinishLine;
+        opponentFinishLine = other.opponentFinishLine;
+        placedWalls = new HashSet<>(other.placedWalls);
+        graph = copyGraph(other.graph);
+        topDistances = other.topDistances.clone();
+        bottomDistances = other.bottomDistances.clone();
+    }
+
 
     public int getCurrentPlayerDistanceToFinish() {
         return distanceToFinish(currPlayerPos, currPlayerFinishLine, topDistances, bottomDistances);
@@ -63,16 +76,24 @@ public class GameState {
 
     public Set<Integer> getPossiblePawnMoveCodes() {
         Set<Integer> possibleMoveCodes = new TreeSet<>();
+        addPawnMoveCodes(possibleMoveCodes, currPlayerPos, opponentPos);
+        return possibleMoveCodes;
+    }
 
-        for (int neighbourPosition : graph.get(currPlayerPos)) {
-            if (neighbourPosition == opponentPos) {
-                addJumpOrSideMoveCodes(possibleMoveCodes);
+    public Set<Integer> getOpponentPossiblePawnMoveCodes() {
+        Set<Integer> possibleMoveCodes = new TreeSet<>();
+        addPawnMoveCodes(possibleMoveCodes, opponentPos, currPlayerPos);
+        return possibleMoveCodes;
+    }
+
+    private void addPawnMoveCodes(Set<Integer> possibleMoveCodes, int movingPlayerPos, int blockingPlayerPos) {
+        for (int neighbourPosition : graph.get(movingPlayerPos)) {
+            if (neighbourPosition == blockingPlayerPos) {
+                addJumpOrSideMoveCodes(possibleMoveCodes, movingPlayerPos, blockingPlayerPos);
             } else {
                 possibleMoveCodes.add(encodePawnMoveCode(neighbourPosition));
             }
         }
-
-        return possibleMoveCodes;
     }
 
     public Set<Integer> getPossibleWallPlacementCodes() {
@@ -96,6 +117,37 @@ public class GameState {
         moveCodes.addAll(getPossibleWallPlacementCodes());
         moveCodes.addAll(getPossiblePawnMoveCodes());
         return moveCodes;
+    }
+
+    public int wallImpact(int wallCode) {
+        if (isPawnMoveCode(wallCode)) {
+            return 0;
+        }
+        if (!isLegalWallPlacement(wallCode)) {
+            throw new IllegalArgumentException("Illegal wall placement code: " + wallCode);
+        }
+
+        int currentPlayerDistanceBefore = getCurrentPlayerDistanceToFinish();
+        int opponentDistanceBefore = getOpponentDistanceToFinish();
+        Map<Integer, Set<Integer>> graphAfterPlacement = copyGraph(graph);
+        updateGraph(graphAfterPlacement, wallCode);
+        int[] topDistancesAfterPlacement = computeDistancesFromRow(graphAfterPlacement, 0);
+        int[] bottomDistancesAfterPlacement = computeDistancesFromRow(graphAfterPlacement, BOARD_LENGTH - 1);
+
+        int currentPlayerDistanceAfter = distanceToFinish(
+                currPlayerPos,
+                currPlayerFinishLine,
+                topDistancesAfterPlacement,
+                bottomDistancesAfterPlacement);
+        int opponentDistanceAfter = distanceToFinish(
+                opponentPos,
+                opponentFinishLine,
+                topDistancesAfterPlacement,
+                bottomDistancesAfterPlacement);
+
+        int movesAddedToOpponent = opponentDistanceAfter - opponentDistanceBefore;
+        int movesAddedToCurrentPlayer = currentPlayerDistanceAfter - currentPlayerDistanceBefore;
+        return movesAddedToOpponent - movesAddedToCurrentPlayer;
     }
 
 
@@ -139,6 +191,25 @@ public class GameState {
         return opponentFinishLine;
     }
 
+    public int getDistanceFromNewPositionToFinish(int newPosition) {
+        return distanceToFinish(newPosition, currPlayerFinishLine, topDistances, bottomDistances);
+    }
+
+    public int[] computeDistancesFromCurrentPlayer() {
+        return computeDistancesFromPosition(currPlayerPos);
+    }
+
+    public int[] computeDistancesFromOpponent() {
+        return computeDistancesFromPosition(opponentPos);
+    }
+
+    public int[] getCurrentPlayerDistancesToFinishByPosition() {
+        return distancesToFinish(currPlayerFinishLine).clone();
+    }
+
+    public int[] getOpponentDistancesToFinishByPosition() {
+        return distancesToFinish(opponentFinishLine).clone();
+    }
 
     public static boolean isPawnMoveCode(int moveCode) {
         return moveCode >= PAWN_MOVE_CODE_OFFSET;
@@ -168,7 +239,7 @@ public class GameState {
         return PAWN_MOVE_CODE_OFFSET + position;
     }
 
-    private static int decodePawnMovePosition(int moveCode) {
+    public static int decodePawnMovePosition(int moveCode) {
         return moveCode - PAWN_MOVE_CODE_OFFSET;
     }
 
@@ -260,35 +331,60 @@ public class GameState {
         return distances;
     }
 
-    private void addJumpOrSideMoveCodes(Set<Integer> possibleMoveCodes) {
-        int currRow = rowOf(currPlayerPos);
-        int currCol = colOf(currPlayerPos);
-        int opponentRow = rowOf(opponentPos);
-        int opponentCol = colOf(opponentPos);
-        int rowDirection = opponentRow - currRow;
-        int colDirection = opponentCol - currCol;
-        int jumpRow = opponentRow + rowDirection;
-        int jumpCol = opponentCol + colDirection;
+    private int[] computeDistancesFromPosition(int startPosition) {
+        int[] distances = new int[BOARD_CELL_COUNT];
+        Arrays.fill(distances, UNREACHABLE_DISTANCE);
+        Queue<Integer> queue = new ArrayDeque<>();
+
+        distances[startPosition] = 0;
+        queue.add(startPosition);
+
+        while (!queue.isEmpty()) {
+            int position = queue.remove();
+            for (int neighbourPosition : graph.get(position)) {
+                if (distances[neighbourPosition] == UNREACHABLE_DISTANCE) {
+                    distances[neighbourPosition] = distances[position] + 1;
+                    queue.add(neighbourPosition);
+                }
+            }
+        }
+
+        return distances;
+    }
+
+    private int[] distancesToFinish(int finishLine) {
+        return finishLine == 0 ? topDistances : bottomDistances;
+    }
+
+    private void addJumpOrSideMoveCodes(Set<Integer> possibleMoveCodes, int movingPlayerPos, int blockingPlayerPos) {
+        int movingRow = rowOf(movingPlayerPos);
+        int movingCol = colOf(movingPlayerPos);
+        int blockingRow = rowOf(blockingPlayerPos);
+        int blockingCol = colOf(blockingPlayerPos);
+        int rowDirection = blockingRow - movingRow;
+        int colDirection = blockingCol - movingCol;
+        int jumpRow = blockingRow + rowDirection;
+        int jumpCol = blockingCol + colDirection;
 
         if (isInsideBoard(jumpRow, jumpCol)) {
             int jumpPosition = encodeCellPosition(jumpRow, jumpCol);
-            if (graph.get(opponentPos).contains(jumpPosition)) {
+            if (graph.get(blockingPlayerPos).contains(jumpPosition)) {
                 possibleMoveCodes.add(encodePawnMoveCode(jumpPosition));
                 return;
             }
         }
 
-        addSideMoveCodeIfPossible(possibleMoveCodes, opponentRow + colDirection, opponentCol + rowDirection);
-        addSideMoveCodeIfPossible(possibleMoveCodes, opponentRow - colDirection, opponentCol - rowDirection);
+        addSideMoveCodeIfPossible(possibleMoveCodes, blockingPlayerPos, blockingRow + colDirection, blockingCol + rowDirection);
+        addSideMoveCodeIfPossible(possibleMoveCodes, blockingPlayerPos, blockingRow - colDirection, blockingCol - rowDirection);
     }
 
-    private void addSideMoveCodeIfPossible(Set<Integer> possibleMoveCodes, int row, int col) {
+    private void addSideMoveCodeIfPossible(Set<Integer> possibleMoveCodes, int fromPosition, int row, int col) {
         if (!isInsideBoard(row, col)) {
             return;
         }
 
         int sidePosition = encodeCellPosition(row, col);
-        if (graph.get(opponentPos).contains(sidePosition)) {
+        if (graph.get(fromPosition).contains(sidePosition)) {
             possibleMoveCodes.add(encodePawnMoveCode(sidePosition));
         }
     }

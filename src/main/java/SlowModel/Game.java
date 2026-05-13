@@ -1,8 +1,11 @@
 package SlowModel;
 
-import AI_prototip.AlgorithmAI;
-import AI_prototip.GameState;
+import AI.Algorithm;
+import AI.GymPython;
+import AI.MiniMax;
+import AI.Mtcs;
 import GUI.GameUI;
+import PerformanceModel.GameState;
 import javafx.application.Platform;
 
 import java.util.ArrayList;
@@ -24,27 +27,40 @@ public class Game {
     private boolean gameLoopRunning;
     private Player winner;
 
-    private final AlgorithmAI algorithm;
+    private final boolean isBottomPlayerStarting;
+    private final Algorithm bottomPlayerAlgorithm;
+    private final Algorithm topPlayerAlgorithm;
+    private GameState aiState;
 
     public Game(GameUI gui, PlayerType bottomPlayerType, PlayerType topPlayerType) {
-        this(gui, bottomPlayerType, topPlayerType, 0, true);
+        this(gui, new PlayerProfile(bottomPlayerType, ""), new PlayerProfile(topPlayerType, ""), 0, true);
     }
 
     public Game(GameUI gui, PlayerType bottomPlayerType, PlayerType topPlayerType, int uiToken) {
-        this(gui, bottomPlayerType, topPlayerType, uiToken, true);
+        this(gui, new PlayerProfile(bottomPlayerType, ""), new PlayerProfile(topPlayerType, ""), uiToken, true);
     }
 
     public Game(GameUI gui, PlayerType bottomPlayerType, PlayerType topPlayerType, int uiToken, boolean isBottomPlayerStarting) {
+        this(
+                gui,
+                new PlayerProfile(bottomPlayerType, ""),
+                new PlayerProfile(topPlayerType, ""),
+                uiToken,
+                isBottomPlayerStarting);
+    }
+
+    public Game(GameUI gui, PlayerProfile bottomPlayerProfile, PlayerProfile topPlayerProfile, int uiToken, boolean isBottomPlayerStarting) {
         this.gui = gui;
         this.uiToken = uiToken;
+        this.isBottomPlayerStarting = isBottomPlayerStarting;
         board = new Board(9);
         Player bottomPlayer = new Player(
-                bottomPlayerType,
+                bottomPlayerProfile.playerType(),
                 board.getBoardLength() - 1,
                 board.getBoardLength() / 2,
                 0);
         Player topPlayer = new Player(
-                topPlayerType,
+                topPlayerProfile.playerType(),
                 0,
                 board.getBoardLength() / 2,
                 board.getBoardLength() - 1);
@@ -54,7 +70,9 @@ public class Game {
         board.setSecondPlayer(topPlayer);
         currentPlayer = isBottomPlayerStarting ? bottomPlayer : topPlayer;
         opponent = isBottomPlayerStarting ? topPlayer : bottomPlayer;
-        algorithm = new AlgorithmAI();
+        aiState = new GameState(isBottomPlayerStarting);
+        bottomPlayerAlgorithm = initAlgorithm(bottomPlayerProfile);
+        topPlayerAlgorithm = initAlgorithm(topPlayerProfile);
         moveHistory = new ArrayList<>();
         thinkingTimes = new ArrayList<>();
         stateVersion = 0;
@@ -96,16 +114,16 @@ public class Game {
                         currentVersion = stateVersion;
                     }
 
-                    boolean moveMade;
+                    TurnResult turnResult;
                     if (turnPlayer.isAI()) {
-                        moveMade = playAiTurn(turnPlayer, currentVersion);
+                        turnResult = playAiTurn(turnPlayer, currentVersion);
                     } else {
                         drawPossiblePawnMoves(turnPlayer, currentVersion);
-                        moveMade = playHumanTurn(turnPlayer, currentVersion);
+                        turnResult = playHumanTurn(turnPlayer, currentVersion);
                         deletePossiblePawnMoves();
                     }
 
-                    if (!moveMade) {
+                    if (!turnResult.moveMade()) {
                         continue;
                     }
 
@@ -114,6 +132,8 @@ public class Game {
                         Platform.runLater(() -> gui.endGame(uiToken, winner));
                         break;
                     }
+
+                    gui.pauseAfterFastMoveIfEnabled(uiToken, turnResult.thinkingTimeNanos());
                 }
             } finally {
                 synchronized (gameLock) {
@@ -168,43 +188,46 @@ public class Game {
         return forfeitureWinner;
     }
 
-    private boolean playAiTurn(Player player, int currentVersion) {
-        Player currentOpponent;
+    private TurnResult playAiTurn(Player player, int currentVersion) {
         GameState state;
+        Algorithm algorithm;
         synchronized (gameLock) {
             if (!isCurrentTurn(player, currentVersion)) {
-                return false;
+                return new TurnResult(false, 0);
             }
-            currentOpponent = opponent;
-            state = new GameState(board, player, currentOpponent);
+            state = new GameState(aiState);
+            algorithm = algorithmFor(player);
         }
 
         long thinkingStartedAt = System.nanoTime();
-        int moveCode = algorithm.generateMove(state, player.getPlayerType());
+        int moveCode = algorithm.generateMove(state);
         long thinkingTimeNanos = System.nanoTime() - thinkingStartedAt;
         Move move = createMoveFromCode(moveCode, player);
-        boolean moveMade = makeMoveIfCurrent(move, player, currentVersion);
-        if (moveMade) {
-            recordThinkingTime(move, thinkingTimeNanos);
+        MoveApplicationResult moveResult = makeMoveIfCurrent(move, player, currentVersion);
+        if (moveResult.moveMade()) {
+            recordThinkingTime(move, thinkingTimeNanos, moveResult.includeInAverage(), moveResult.wallImpact());
+            return new TurnResult(true, thinkingTimeNanos);
         }
-        return moveMade;
+        return new TurnResult(false, 0);
     }
 
-    private boolean playHumanTurn(Player player, int currentVersion) {
+    private TurnResult playHumanTurn(Player player, int currentVersion) {
         long thinkingStartedAt = System.nanoTime();
         do {
             int[] coordinates = getMouseClickCoordinates();
             if (!isCurrentTurn(player, currentVersion)) {
-                return false;
+                return new TurnResult(false, 0);
             }
             if (Arrays.equals(coordinates, new int[]{0, 0})) {
                 continue;
             }
 
             Move move = calculateMove(coordinates, player);
-            if (makeLegalHumanMove(move, player, currentVersion)) {
-                recordThinkingTime(move, System.nanoTime() - thinkingStartedAt);
-                return true;
+            MoveApplicationResult moveResult = makeLegalHumanMove(move, player, currentVersion);
+            if (moveResult.moveMade()) {
+                long thinkingTimeNanos = System.nanoTime() - thinkingStartedAt;
+                recordThinkingTime(move, thinkingTimeNanos, moveResult.includeInAverage(), moveResult.wallImpact());
+                return new TurnResult(true, thinkingTimeNanos);
             }
         } while (true);
     }
@@ -224,24 +247,32 @@ public class Game {
         Platform.runLater(() -> gui.deletePossiblePawnMoves(uiToken));
     }
 
-    private boolean makeLegalHumanMove(Move move, Player player, int currentVersion) {
+    private MoveApplicationResult makeLegalHumanMove(Move move, Player player, int currentVersion) {
         synchronized (gameLock) {
             if (!isCurrentTurn(player, currentVersion) || !board.isLegalMove(move)) {
-                return false;
+                return new MoveApplicationResult(false, false, 0);
             }
         }
 
         return makeMoveIfCurrent(move, player, currentVersion);
     }
 
-    private boolean makeMoveIfCurrent(Move move, Player player, int currentVersion) {
+    private MoveApplicationResult makeMoveIfCurrent(Move move, Player player, int currentVersion) {
         boolean undoAvailable;
+        boolean includeInAverage;
+        int wallImpact;
         synchronized (gameLock) {
             if (!isCurrentTurn(player, currentVersion)) {
-                return false;
+                return new MoveApplicationResult(false, false, 0);
             }
+            int moveCode = encodeMoveCode(move);
+            includeInAverage = player.wallsLeft() > 0;
+            wallImpact = move.getType() == MoveType.WALL_PLACE ? aiState.wallImpact(moveCode) : 0;
+            GameState nextAiState = new GameState(aiState);
+            nextAiState.update(moveCode);
             board.update(move);
             player.update(move);
+            aiState = nextAiState;
             moveHistory.add(move);
             undoAvailable = hasHumanMoveInHistory();
         }
@@ -250,26 +281,55 @@ public class Game {
             gui.draw(uiToken, move);
             gui.setUndoAvailable(uiToken, undoAvailable);
         });
-        return true;
+        return new MoveApplicationResult(true, includeInAverage, wallImpact);
     }
 
     private Move createMoveFromCode(int moveCode, Player player) {
-        int boardLength = board.getBoardLength();
-
         if (GameState.isPawnMoveCode(moveCode)) {
             return new Move(
                     player,
                     MoveType.PAWN_MOVE,
-                    GameState.decodePawnMoveRow(moveCode, boardLength),
-                    GameState.decodePawnMoveCol(moveCode, boardLength));
+                    GameState.decodePawnMoveRow(moveCode),
+                    GameState.decodePawnMoveCol(moveCode));
         }
 
         return new Move(
                 player,
                 MoveType.WALL_PLACE,
-                GameState.decodeWallRow(moveCode, boardLength),
-                GameState.decodeWallCol(moveCode, boardLength),
+                GameState.decodeWallRow(moveCode),
+                GameState.decodeWallCol(moveCode),
                 GameState.decodeWallIsHorizontal(moveCode));
+    }
+
+    private int encodeMoveCode(Move move) {
+        if (move.getType() == MoveType.PAWN_MOVE) {
+            return GameState.PAWN_MOVE_CODE_OFFSET
+                    + move.getTargetRow() * GameState.BOARD_LENGTH
+                    + move.getTargetCol();
+        }
+
+        int wallGridLength = GameState.BOARD_LENGTH - 1;
+        int wallAnchor = move.getTargetRow() * wallGridLength + move.getTargetCol();
+        return wallAnchor * 2 + (move.isHorizontal() ? 0 : 1);
+    }
+
+    private Algorithm initAlgorithm(PlayerProfile playerProfile) {
+        return switch (playerProfile.playerType()) {
+            case MINIMAX -> new MiniMax(
+                    playerProfile.minimaxDepth(),
+                    playerProfile.minimaxMoveOrdering());
+            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD -> new Mtcs(playerProfile.mtcsDepth());
+            case GYM_PYTHON -> new GymPython();
+            case HUMAN -> null;
+        };
+    }
+
+    private Algorithm algorithmFor(Player player) {
+        Algorithm algorithm = isBottomPlayer(player) ? bottomPlayerAlgorithm : topPlayerAlgorithm;
+        if (algorithm == null) {
+            throw new IllegalArgumentException("Algorithm cannot generate a move for a human player.");
+        }
+        return algorithm;
     }
 
     private Move calculateMove(int[] coordinates, Player player) {
@@ -379,10 +439,10 @@ public class Game {
         return lastHumanMoveIndex() >= 0;
     }
 
-    private void recordThinkingTime(Move move, long thinkingTimeNanos) {
+    private void recordThinkingTime(Move move, long thinkingTimeNanos, boolean includeInAverage, int wallImpact) {
         ThinkingStats thinkingStats;
         synchronized (gameLock) {
-            thinkingTimes.add(new MoveThinkingTime(move, thinkingTimeNanos));
+            thinkingTimes.add(new MoveThinkingTime(move, thinkingTimeNanos, includeInAverage, wallImpact));
             thinkingStats = thinkingStats();
         }
 
@@ -394,38 +454,54 @@ public class Game {
             return ThinkingStats.empty();
         }
 
-        long bottomTotalThinkingTimeNanos = 0;
-        long topTotalThinkingTimeNanos = 0;
+        long bottomMoveTimeTotalNanos = 0;
+        long topMoveTimeTotalNanos = 0;
+        long bottomTotalThinkingNanos = 0;
+        long topTotalThinkingNanos = 0;
         long bottomLastMoveNanos = 0;
         long topLastMoveNanos = 0;
         long bottomMaxNanos = 0;
         long topMaxNanos = 0;
+        int bottomWallImpactTotal = 0;
+        int topWallImpactTotal = 0;
         int bottomMoveCount = 0;
         int topMoveCount = 0;
 
         for (MoveThinkingTime thinkingTime : thinkingTimes) {
             if (isBottomPlayer(thinkingTime.move().getPlayer())) {
-                bottomTotalThinkingTimeNanos += thinkingTime.thinkingTimeNanos();
                 bottomLastMoveNanos = thinkingTime.thinkingTimeNanos();
                 bottomMaxNanos = Math.max(bottomMaxNanos, thinkingTime.thinkingTimeNanos());
-                bottomMoveCount++;
+                bottomTotalThinkingNanos += thinkingTime.thinkingTimeNanos();
+                bottomWallImpactTotal += thinkingTime.wallImpact();
+                if (thinkingTime.includeInAverage()) {
+                    bottomMoveTimeTotalNanos += thinkingTime.thinkingTimeNanos();
+                    bottomMoveCount++;
+                }
             } else {
-                topTotalThinkingTimeNanos += thinkingTime.thinkingTimeNanos();
                 topLastMoveNanos = thinkingTime.thinkingTimeNanos();
                 topMaxNanos = Math.max(topMaxNanos, thinkingTime.thinkingTimeNanos());
-                topMoveCount++;
+                topTotalThinkingNanos += thinkingTime.thinkingTimeNanos();
+                topWallImpactTotal += thinkingTime.wallImpact();
+                if (thinkingTime.includeInAverage()) {
+                    topMoveTimeTotalNanos += thinkingTime.thinkingTimeNanos();
+                    topMoveCount++;
+                }
             }
         }
 
         return new ThinkingStats(
                 bottomLastMoveNanos,
-                bottomTotalThinkingTimeNanos,
+                bottomMoveTimeTotalNanos,
                 bottomMoveCount,
                 bottomMaxNanos,
+                bottomTotalThinkingNanos,
+                bottomWallImpactTotal,
                 topLastMoveNanos,
-                topTotalThinkingTimeNanos,
+                topMoveTimeTotalNanos,
                 topMoveCount,
-                topMaxNanos);
+                topMaxNanos,
+                topTotalThinkingNanos,
+                topWallImpactTotal);
     }
 
     private void rebuildGameStateFromHistory() {
@@ -439,8 +515,10 @@ public class Game {
         board.getOneCell(topPlayer.getRow(), topPlayer.getCol()).setPlayer(topPlayer);
         board.setFirstPlayer(bottomPlayer);
         board.setSecondPlayer(topPlayer);
+        aiState = new GameState(isBottomPlayerStarting);
 
         for (Move move : movesToReplay) {
+            aiState.update(encodeMoveCode(move));
             board.update(move);
             move.getPlayer().update(move);
         }
@@ -470,7 +548,13 @@ public class Game {
         return player.getRow() == player.getFinishRow();
     }
 
-    private record MoveThinkingTime(Move move, long thinkingTimeNanos) {
+    private record MoveThinkingTime(Move move, long thinkingTimeNanos, boolean includeInAverage, int wallImpact) {
+    }
+
+    private record MoveApplicationResult(boolean moveMade, boolean includeInAverage, int wallImpact) {
+    }
+
+    private record TurnResult(boolean moveMade, long thinkingTimeNanos) {
     }
 
 }

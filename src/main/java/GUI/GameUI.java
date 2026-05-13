@@ -17,6 +17,9 @@ import java.util.concurrent.Semaphore;
 
 public class GameUI extends Application {
 
+    private static final long FAST_MOVE_THRESHOLD_NANOS = 1_000_000_000L;
+    private static final long FAST_MOVE_PAUSE_MILLIS = 1_000L;
+
     private final Semaphore clickSemaphore = new Semaphore(0);
 
     private volatile int boardX;
@@ -41,6 +44,7 @@ public class GameUI extends Application {
     private int remainingAutomaticRematches;
     private int activeGameToken;
     private boolean isFirstPlayerStarting;
+    private volatile boolean fastMoveDelayEnabled;
 
     public static void main(String[] args) {
         launch(args);
@@ -87,6 +91,7 @@ public class GameUI extends Application {
         int gameToken = ++activeGameToken;
         scoredGameToken = -1;
         scoredWinnerProfile = null;
+        fastMoveDelayEnabled = false;
 
         gameWindow = new GameWindow(
                 this::storeClickCoordinates,
@@ -94,6 +99,7 @@ public class GameUI extends Application {
                 this::newGame,
                 this::rematchGame,
                 this::exitGame,
+                this::setFastMoveDelayEnabled,
                 firstPlayerProfile.displayName("First Player"),
                 secondPlayerProfile.displayName("Second Player"),
                 scoreFirstPlayerDisplayName,
@@ -121,15 +127,15 @@ public class GameUI extends Application {
         if (isAiVsAi(firstPlayerProfile, secondPlayerProfile)) {
             currentPerformanceGame = new PerformanceGameController(
                     this,
-                    firstPlayerProfile.playerType().name(),
-                    secondPlayerProfile.playerType().name(),
+                    firstPlayerProfile,
+                    secondPlayerProfile,
                     gameToken,
                     isFirstPlayerStarting);
         } else {
             currentGame = new Game(
                     this,
-                    firstPlayerProfile.playerType(),
-                    secondPlayerProfile.playerType(),
+                    firstPlayerProfile,
+                    secondPlayerProfile,
                     gameToken,
                     isFirstPlayerStarting);
         }
@@ -241,13 +247,46 @@ public class GameUI extends Application {
         }
     }
 
-    public void recordPerformanceMoveTime(int gameToken, boolean isPlayerAMove, long thinkingTimeNanos) {
+    public void recordPerformanceMoveTime(
+            int gameToken,
+            boolean isPlayerAMove,
+            boolean includeInAverage,
+            long thinkingTimeNanos,
+            int wallImpact) {
         if (!isActiveGame(gameToken)) {
             return;
         }
 
-        currentGameThinkingStats = appendThinkingTime(currentGameThinkingStats, isPlayerAMove, thinkingTimeNanos);
+        currentGameThinkingStats = appendMoveStats(
+                currentGameThinkingStats,
+                isPlayerAMove,
+                includeInAverage,
+                thinkingTimeNanos,
+                wallImpact);
         updateThinkingTimeDisplay();
+    }
+
+    public void pauseAfterFastMoveIfEnabled(int gameToken, long thinkingTimeNanos) {
+        if (!fastMoveDelayEnabled
+                || thinkingTimeNanos >= FAST_MOVE_THRESHOLD_NANOS
+                || !isActiveGame(gameToken)) {
+            return;
+        }
+
+        long pauseUntilNanos = System.nanoTime() + FAST_MOVE_PAUSE_MILLIS * 1_000_000L;
+        while (fastMoveDelayEnabled && isActiveGame(gameToken)) {
+            long remainingNanos = pauseUntilNanos - System.nanoTime();
+            if (remainingNanos <= 0) {
+                return;
+            }
+
+            try {
+                Thread.sleep(Math.min(50, Math.max(1, remainingNanos / 1_000_000L)));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     public void endGame(Player player) {
@@ -331,6 +370,10 @@ public class GameUI extends Application {
         gameWindow.showIllegalMove();
     }
 
+    private void setFastMoveDelayEnabled(boolean fastMoveDelayEnabled) {
+        this.fastMoveDelayEnabled = fastMoveDelayEnabled;
+    }
+
     private void initializeScore(PlayerProfile firstPlayerProfile, PlayerProfile secondPlayerProfile) {
         scoreFirstPlayerProfile = firstPlayerProfile;
         scoreSecondPlayerProfile = secondPlayerProfile;
@@ -371,7 +414,7 @@ public class GameUI extends Application {
     }
 
     private void commitCurrentThinkingStats() {
-        accumulatedThinkingStats = combineThinkingStats(accumulatedThinkingStats, currentGameThinkingStats, false);
+        accumulatedThinkingStats = accumulatedThinkingStats.plus(currentGameThinkingStats, false);
         currentGameThinkingStats = ThinkingStats.empty();
     }
 
@@ -380,53 +423,46 @@ public class GameUI extends Application {
             return;
         }
 
-        ThinkingStats displayStats = combineThinkingStats(accumulatedThinkingStats, currentGameThinkingStats, true);
+        ThinkingStats displayStats = accumulatedThinkingStats.plus(currentGameThinkingStats, true);
+        ThinkingStats completedStats = completedThinkingStats();
         gameWindow.updateThinkingTime(
-                displayStats.bottomLastMoveNanos(),
                 displayStats.bottomAverageNanos(),
                 displayStats.bottomMaxNanos(),
-                displayStats.topLastMoveNanos(),
+                averageNanosPerCompletedMatch(completedStats.bottomTotalThinkingNanos()),
+                averageImpactPerCompletedMatch(completedStats.bottomWallImpactTotal()),
                 displayStats.topAverageNanos(),
-                displayStats.topMaxNanos());
+                displayStats.topMaxNanos(),
+                averageNanosPerCompletedMatch(completedStats.topTotalThinkingNanos()),
+                averageImpactPerCompletedMatch(completedStats.topWallImpactTotal()));
     }
 
-    private ThinkingStats combineThinkingStats(ThinkingStats previousStats, ThinkingStats currentStats, boolean keepCurrentLastMove) {
-        long bottomLastMoveNanos = keepCurrentLastMove ? currentStats.bottomLastMoveNanos() : 0;
-        long topLastMoveNanos = keepCurrentLastMove ? currentStats.topLastMoveNanos() : 0;
-
-        return new ThinkingStats(
-                bottomLastMoveNanos,
-                previousStats.bottomTotalNanos() + currentStats.bottomTotalNanos(),
-                previousStats.bottomMoveCount() + currentStats.bottomMoveCount(),
-                Math.max(previousStats.bottomMaxNanos(), currentStats.bottomMaxNanos()),
-                topLastMoveNanos,
-                previousStats.topTotalNanos() + currentStats.topTotalNanos(),
-                previousStats.topMoveCount() + currentStats.topMoveCount(),
-                Math.max(previousStats.topMaxNanos(), currentStats.topMaxNanos()));
-    }
-
-    private ThinkingStats appendThinkingTime(ThinkingStats stats, boolean isPlayerAMove, long thinkingTimeNanos) {
-        if (isPlayerAMove) {
-            return new ThinkingStats(
-                    thinkingTimeNanos,
-                    stats.bottomTotalNanos() + thinkingTimeNanos,
-                    stats.bottomMoveCount() + 1,
-                    Math.max(stats.bottomMaxNanos(), thinkingTimeNanos),
-                    stats.topLastMoveNanos(),
-                    stats.topTotalNanos(),
-                    stats.topMoveCount(),
-                    stats.topMaxNanos());
+    private ThinkingStats completedThinkingStats() {
+        if (scoredGameToken == activeGameToken) {
+            return accumulatedThinkingStats.plus(currentGameThinkingStats, false);
         }
 
-        return new ThinkingStats(
-                stats.bottomLastMoveNanos(),
-                stats.bottomTotalNanos(),
-                stats.bottomMoveCount(),
-                stats.bottomMaxNanos(),
-                thinkingTimeNanos,
-                stats.topTotalNanos() + thinkingTimeNanos,
-                stats.topMoveCount() + 1,
-                Math.max(stats.topMaxNanos(), thinkingTimeNanos));
+        return accumulatedThinkingStats;
+    }
+
+    private double averageNanosPerCompletedMatch(long totalNanos) {
+        return completedMatches == 0 ? Double.NaN : totalNanos / (double) completedMatches;
+    }
+
+    private double averageImpactPerCompletedMatch(int totalImpact) {
+        return completedMatches == 0 ? Double.NaN : totalImpact / (double) completedMatches;
+    }
+
+    private ThinkingStats appendMoveStats(
+            ThinkingStats stats,
+            boolean isPlayerAMove,
+            boolean includeInAverage,
+            long thinkingTimeNanos,
+            int wallImpact) {
+        if (isPlayerAMove) {
+            return stats.appendBottomMove(includeInAverage, thinkingTimeNanos, wallImpact);
+        }
+
+        return stats.appendTopMove(includeInAverage, thinkingTimeNanos, wallImpact);
     }
 
     private void recordGameResult(int gameToken, Player winner) {
@@ -438,6 +474,7 @@ public class GameUI extends Application {
         }
 
         gameWindow.showGameResult(winner, scoreFirstPlayerWins, scoreSecondPlayerWins);
+        updateThinkingTimeDisplay();
         scheduleAutomaticRematch(gameToken);
     }
 
@@ -450,6 +487,7 @@ public class GameUI extends Application {
         }
 
         gameWindow.showPerformanceGameResult(isPlayerAWinner, scoreFirstPlayerWins, scoreSecondPlayerWins);
+        updateThinkingTimeDisplay();
         scheduleAutomaticRematch(gameToken);
     }
 

@@ -10,19 +10,21 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
+import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.text.Font;
@@ -36,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class GameWindow {
 
@@ -47,7 +50,9 @@ public class GameWindow {
     private static final int BOARD_FRAME_PADDING = 12;
     private static final int BOARD_FRAME_SIZE = BOARD_CONTENT_SIZE + BOARD_FRAME_PADDING * 2;
     private static final int SCENE_WIDTH = 900;
-    private static final int SCENE_HEIGHT = 760;
+    private static final int SCENE_HEIGHT = 820;
+    private static final int STATS_METRIC_COLUMN_WIDTH = 138;
+    private static final int STATS_PLAYER_COLUMN_WIDTH = 162;
 
     private final Stage stage;
     private final GridPane gridPane;
@@ -56,6 +61,7 @@ public class GameWindow {
     private final Runnable newGameHandler;
     private final Runnable rematchHandler;
     private final Runnable exitHandler;
+    private final Consumer<Boolean> fastMoveDelayHandler;
     private final List<Circle> possiblePawnMoves;
     private final List<Rectangle> boardCells;
     private final List<Line> wallLines;
@@ -81,38 +87,44 @@ public class GameWindow {
     private Circle secondPlayerPawn;
     private Label firstPlayerWallsLabel;
     private Label secondPlayerWallsLabel;
-    private Label playerTurn;
+    private HBox firstPlayerTurnRow;
+    private HBox secondPlayerTurnRow;
+    private Polygon firstPlayerTurnSymbol;
+    private Polygon secondPlayerTurnSymbol;
+    private Label firstPlayerTurnLabel;
+    private Label secondPlayerTurnLabel;
     private Button undoButton;
     private Button newGameButton;
     private Button rematchButton;
     private Button exitButton;
     private MenuButton themeButton;
+    private ToggleButton fastMoveDelaySwitch;
+    private Label fastModeLabel;
+    private Label slowModeLabel;
+    private StackPane fastMoveDelayTrack;
+    private Circle fastMoveDelayThumb;
     private VBox controlsCard;
-    private VBox aiThinkingCard;
-    private HBox aiThinkingColumns;
-    private VBox aiThinkingMetricLabels;
-    private HBox scoreCard;
+    private VBox matchStatsCard;
+    private GridPane matchStatsGrid;
     private Label controlsTitle;
-    private Label aiThinkingTitle;
-    private VBox firstPlayerAiThinkingSection;
-    private VBox secondPlayerAiThinkingSection;
-    private Label firstPlayerAiThinkingNameLabel;
-    private Label secondPlayerAiThinkingNameLabel;
-    private Label aiLastThinkingLabel;
-    private Label aiAverageThinkingLabel;
-    private Label aiMaxThinkingLabel;
-    private Label firstPlayerAiLastThinkingValueLabel;
-    private Label firstPlayerAiAverageThinkingValueLabel;
-    private Label firstPlayerAiMaxThinkingValueLabel;
-    private Label secondPlayerAiLastThinkingValueLabel;
-    private Label secondPlayerAiAverageThinkingValueLabel;
-    private Label secondPlayerAiMaxThinkingValueLabel;
-    private HBox scoreNumbers;
+    private Label statsMetricHeaderLabel;
+    private Label scoreMetricLabel;
+    private Label averageMoveMetricLabel;
+    private Label longestMoveMetricLabel;
+    private Label averageGameThinkingMetricLabel;
+    private Label averageWallImpactMetricLabel;
     private Label firstPlayerScoreNameLabel;
     private Label secondPlayerScoreNameLabel;
     private Label firstPlayerScoreValueLabel;
     private Label secondPlayerScoreValueLabel;
-    private Label scoreDashLabel;
+    private Label firstPlayerAverageMoveValueLabel;
+    private Label secondPlayerAverageMoveValueLabel;
+    private Label firstPlayerLongestMoveValueLabel;
+    private Label secondPlayerLongestMoveValueLabel;
+    private Label firstPlayerAverageGameThinkingValueLabel;
+    private Label secondPlayerAverageGameThinkingValueLabel;
+    private Label firstPlayerAverageWallImpactValueLabel;
+    private Label secondPlayerAverageWallImpactValueLabel;
     private boolean isFirstPlayerTurn;
     private boolean isFirstPlayerWinner;
     private boolean isGameOver;
@@ -123,6 +135,7 @@ public class GameWindow {
             Runnable newGameHandler,
             Runnable rematchHandler,
             Runnable exitHandler,
+            Consumer<Boolean> fastMoveDelayHandler,
             String firstPlayerDisplayName,
             String secondPlayerDisplayName,
             String scoreFirstPlayerDisplayName,
@@ -140,6 +153,7 @@ public class GameWindow {
         this.newGameHandler = newGameHandler;
         this.rematchHandler = rematchHandler;
         this.exitHandler = exitHandler;
+        this.fastMoveDelayHandler = fastMoveDelayHandler;
         this.firstPlayerDisplayName = firstPlayerDisplayName;
         this.secondPlayerDisplayName = secondPlayerDisplayName;
         this.scoreFirstPlayerDisplayName = scoreFirstPlayerDisplayName;
@@ -178,18 +192,14 @@ public class GameWindow {
     public void showGameResult(Player winner, int scoreFirstPlayerWins, int scoreSecondPlayerWins) {
         isGameOver = true;
         isFirstPlayerWinner = isBottomPlayer(winner);
-        Color winnerColor = isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        playerTurn.setText("Game over - " + playerDisplayName(winner) + " won");
-        GuiTheme.styleTurnLabel(playerTurn, winnerColor);
+        updateTurnIndicators();
         updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, true);
     }
 
     public void showPerformanceGameResult(boolean isPlayerAWinner, int scoreFirstPlayerWins, int scoreSecondPlayerWins) {
         isGameOver = true;
         this.isFirstPlayerWinner = isPlayerAWinner;
-        Color winnerColor = isPlayerAWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        playerTurn.setText("Game over - " + playerDisplayName(isPlayerAWinner) + " won");
-        GuiTheme.styleTurnLabel(playerTurn, winnerColor);
+        updateTurnIndicators();
         updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, true);
     }
 
@@ -203,29 +213,30 @@ public class GameWindow {
             secondPlayerScoreValueLabel.setText(String.valueOf(scoreSecondPlayerWins));
         }
 
-        if (scoreCard != null) {
-            scoreCard.setVisible(showScore);
-            scoreCard.setManaged(showScore);
-        }
+        setStatsRowVisible(showScore, scoreMetricLabel, firstPlayerScoreValueLabel, secondPlayerScoreValueLabel);
     }
 
     public void updateThinkingTime(
-            long firstPlayerLastMoveNanos,
             long firstPlayerAverageNanos,
             long firstPlayerMaxNanos,
-            long secondPlayerLastMoveNanos,
+            double firstPlayerAverageGameThinkingNanos,
+            double firstPlayerAverageWallImpact,
             long secondPlayerAverageNanos,
-            long secondPlayerMaxNanos) {
-        if (firstPlayerAiLastThinkingValueLabel == null || secondPlayerAiLastThinkingValueLabel == null) {
+            long secondPlayerMaxNanos,
+            double secondPlayerAverageGameThinkingNanos,
+            double secondPlayerAverageWallImpact) {
+        if (firstPlayerAverageMoveValueLabel == null || secondPlayerAverageMoveValueLabel == null) {
             return;
         }
 
-        firstPlayerAiLastThinkingValueLabel.setText(formatThinkingTime(firstPlayerLastMoveNanos));
-        firstPlayerAiAverageThinkingValueLabel.setText(formatThinkingTime(firstPlayerAverageNanos));
-        firstPlayerAiMaxThinkingValueLabel.setText(formatThinkingTime(firstPlayerMaxNanos));
-        secondPlayerAiLastThinkingValueLabel.setText(formatThinkingTime(secondPlayerLastMoveNanos));
-        secondPlayerAiAverageThinkingValueLabel.setText(formatThinkingTime(secondPlayerAverageNanos));
-        secondPlayerAiMaxThinkingValueLabel.setText(formatThinkingTime(secondPlayerMaxNanos));
+        firstPlayerAverageMoveValueLabel.setText(formatThinkingTime(firstPlayerAverageNanos));
+        firstPlayerLongestMoveValueLabel.setText(formatThinkingTime(firstPlayerMaxNanos));
+        firstPlayerAverageGameThinkingValueLabel.setText(formatThinkingTime(firstPlayerAverageGameThinkingNanos));
+        firstPlayerAverageWallImpactValueLabel.setText(formatImpact(firstPlayerAverageWallImpact));
+        secondPlayerAverageMoveValueLabel.setText(formatThinkingTime(secondPlayerAverageNanos));
+        secondPlayerLongestMoveValueLabel.setText(formatThinkingTime(secondPlayerMaxNanos));
+        secondPlayerAverageGameThinkingValueLabel.setText(formatThinkingTime(secondPlayerAverageGameThinkingNanos));
+        secondPlayerAverageWallImpactValueLabel.setText(formatImpact(secondPlayerAverageWallImpact));
     }
 
     private Scene createScene() {
@@ -251,6 +262,18 @@ public class GameWindow {
         exitButton.setOnAction(event -> exitHandler.run());
         GuiTheme.styleDangerCompactButton(exitButton);
 
+        fastMoveDelaySwitch = new ToggleButton();
+        fastMoveDelaySwitch.setSelected(false);
+        fastMoveDelaySwitch.setGraphic(createFastMoveDelaySwitchGraphic());
+        fastMoveDelaySwitch.setAccessibleText("Fast");
+        fastMoveDelaySwitch.setOnAction(event -> updateFastMoveDelaySwitch());
+        GuiTheme.styleSpeedSwitch(
+                fastMoveDelaySwitch,
+                fastModeLabel,
+                slowModeLabel,
+                fastMoveDelayTrack,
+                fastMoveDelayThumb);
+
         gridPane.setMinSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
         gridPane.setPrefSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
         gridPane.setMaxSize(BOARD_CONTENT_SIZE, BOARD_CONTENT_SIZE);
@@ -262,7 +285,7 @@ public class GameWindow {
         boardFrame.setMaxSize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
         boardFrame.setStyle(GuiTheme.boardFrameStyle());
 
-        VBox boardArea = new VBox(12, playerTurn, createScoreCard(), boardFrame);
+        VBox boardArea = new VBox(12, createMatchStatsCard(), boardFrame);
         boardArea.setAlignment(Pos.CENTER);
 
         VBox sidebar = createSidebar();
@@ -280,8 +303,6 @@ public class GameWindow {
     private void createStatusLabels() {
         firstPlayerWallsLabel = createWallsLabel(GuiTheme.playerOne());
         secondPlayerWallsLabel = createWallsLabel(GuiTheme.playerTwo());
-        playerTurn = new Label(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
-        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
     }
 
     private Label createWallsLabel(Color color) {
@@ -295,48 +316,88 @@ public class GameWindow {
         VBox sidebar = new VBox(14,
                 createSecondPlayerCard(),
                 createFirstPlayerCard(),
-                createControlsCard(),
-                createAiThinkingCard());
+                createControlsCard());
         sidebar.setAlignment(Pos.TOP_LEFT);
         sidebar.setMinWidth(250);
         return sidebar;
     }
 
-    private HBox createScoreCard() {
-        firstPlayerScoreNameLabel = createScoreNameLabel(scoreFirstPlayerDisplayName, Pos.CENTER_RIGHT);
-        secondPlayerScoreNameLabel = createScoreNameLabel(scoreSecondPlayerDisplayName, Pos.CENTER_LEFT);
-        firstPlayerScoreValueLabel = createScoreValueLabel(scoreFirstPlayerColor());
-        secondPlayerScoreValueLabel = createScoreValueLabel(scoreSecondPlayerColor());
-        scoreDashLabel = new Label("-");
-        scoreDashLabel.setTextFill(GuiTheme.mutedText());
-        scoreDashLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 24));
-
-        scoreNumbers = new HBox(6, firstPlayerScoreValueLabel, scoreDashLabel, secondPlayerScoreValueLabel);
-        scoreNumbers.setAlignment(Pos.CENTER);
-        scoreNumbers.setMinWidth(110);
-        scoreNumbers.setStyle(GuiTheme.scoreNumbersStyle());
-
-        scoreCard = new HBox(14, firstPlayerScoreNameLabel, scoreNumbers, secondPlayerScoreNameLabel);
-        scoreCard.setAlignment(Pos.CENTER);
-        scoreCard.setPadding(new Insets(8, 16, 8, 16));
-        scoreCard.setMinWidth(360);
-        scoreCard.setMaxWidth(Double.MAX_VALUE);
-        scoreCard.setStyle(GuiTheme.scoreboardStyle());
-        HBox.setHgrow(firstPlayerScoreNameLabel, Priority.ALWAYS);
-        HBox.setHgrow(secondPlayerScoreNameLabel, Priority.ALWAYS);
-        updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, showScore);
-        return scoreCard;
+    private VBox createMatchStatsCard() {
+        matchStatsGrid = createMatchStatsGrid();
+        matchStatsCard = new VBox(matchStatsGrid);
+        matchStatsCard.setAlignment(Pos.CENTER);
+        matchStatsCard.setPadding(new Insets(10, 16, 10, 16));
+        matchStatsCard.setMinWidth(BOARD_FRAME_SIZE);
+        matchStatsCard.setMaxWidth(BOARD_FRAME_SIZE);
+        matchStatsCard.setStyle(GuiTheme.scoreboardStyle());
+        return matchStatsCard;
     }
 
-    private Label createScoreNameLabel(String playerName, Pos alignment) {
-        Label label = new Label(playerName);
-        label.setWrapText(true);
-        label.setTextFill(GuiTheme.text());
-        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 14));
-        label.setAlignment(alignment);
-        label.setMinWidth(110);
-        label.setMaxWidth(Double.MAX_VALUE);
-        return label;
+    private GridPane createMatchStatsGrid() {
+        statsMetricHeaderLabel = createStatsMetricLabel("Statistic");
+        statsMetricHeaderLabel.setAlignment(Pos.CENTER);
+        firstPlayerScoreNameLabel = createStatsHeaderLabel(
+                shortPlayerName(scoreFirstPlayerDisplayName, "Player"),
+                scoreFirstPlayerColor());
+        secondPlayerScoreNameLabel = createStatsHeaderLabel(
+                shortPlayerName(scoreSecondPlayerDisplayName, "Player"),
+                scoreSecondPlayerColor());
+        scoreMetricLabel = createStatsMetricLabel("Score");
+        averageMoveMetricLabel = createStatsMetricLabel("Avg move");
+        longestMoveMetricLabel = createStatsMetricLabel("Longest move");
+        averageGameThinkingMetricLabel = createStatsMetricLabel("Avg total/game");
+        averageWallImpactMetricLabel = createStatsMetricLabel("Avg wall impact");
+
+        firstPlayerScoreValueLabel = createScoreValueLabel(scoreFirstPlayerColor());
+        secondPlayerScoreValueLabel = createScoreValueLabel(scoreSecondPlayerColor());
+        firstPlayerAverageMoveValueLabel = createStatsValueLabel();
+        secondPlayerAverageMoveValueLabel = createStatsValueLabel();
+        firstPlayerLongestMoveValueLabel = createStatsValueLabel();
+        secondPlayerLongestMoveValueLabel = createStatsValueLabel();
+        firstPlayerAverageGameThinkingValueLabel = createStatsValueLabel();
+        secondPlayerAverageGameThinkingValueLabel = createStatsValueLabel();
+        firstPlayerAverageWallImpactValueLabel = createStatsValueLabel();
+        secondPlayerAverageWallImpactValueLabel = createStatsValueLabel();
+
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(5);
+        grid.setAlignment(Pos.CENTER);
+        grid.setMinWidth(BOARD_FRAME_SIZE - 48);
+        grid.setMaxWidth(BOARD_FRAME_SIZE - 48);
+        grid.getColumnConstraints().addAll(
+                new ColumnConstraints(STATS_METRIC_COLUMN_WIDTH),
+                new ColumnConstraints(STATS_PLAYER_COLUMN_WIDTH),
+                new ColumnConstraints(STATS_PLAYER_COLUMN_WIDTH));
+
+        addStatsCell(grid, statsMetricHeaderLabel, 0, 0, STATS_METRIC_COLUMN_WIDTH);
+        addStatsCell(grid, firstPlayerScoreNameLabel, 1, 0, STATS_PLAYER_COLUMN_WIDTH);
+        addStatsCell(grid, secondPlayerScoreNameLabel, 2, 0, STATS_PLAYER_COLUMN_WIDTH);
+        addStatsRow(grid, 1, scoreMetricLabel, firstPlayerScoreValueLabel, secondPlayerScoreValueLabel);
+        addStatsRow(grid, 2, averageMoveMetricLabel, firstPlayerAverageMoveValueLabel, secondPlayerAverageMoveValueLabel);
+        addStatsRow(grid, 3, longestMoveMetricLabel, firstPlayerLongestMoveValueLabel, secondPlayerLongestMoveValueLabel);
+        addStatsRow(
+                grid,
+                4,
+                averageGameThinkingMetricLabel,
+                firstPlayerAverageGameThinkingValueLabel,
+                secondPlayerAverageGameThinkingValueLabel);
+        addStatsRow(
+                grid,
+                5,
+                averageWallImpactMetricLabel,
+                firstPlayerAverageWallImpactValueLabel,
+                secondPlayerAverageWallImpactValueLabel);
+
+        updateScore(scoreFirstPlayerWins, scoreSecondPlayerWins, showScore);
+        updateThinkingTime(0, 0, Double.NaN, Double.NaN, 0, 0, Double.NaN, Double.NaN);
+        return grid;
+    }
+
+    private void addStatsRow(GridPane grid, int row, Label metricLabel, Label firstPlayerValue, Label secondPlayerValue) {
+        addStatsCell(grid, metricLabel, 0, row, STATS_METRIC_COLUMN_WIDTH);
+        addStatsCell(grid, firstPlayerValue, 1, row, STATS_PLAYER_COLUMN_WIDTH);
+        addStatsCell(grid, secondPlayerValue, 2, row, STATS_PLAYER_COLUMN_WIDTH);
     }
 
     private Color scoreFirstPlayerColor() {
@@ -350,9 +411,10 @@ public class GameWindow {
     private Label createScoreValueLabel(Color accentColor) {
         Label label = new Label();
         label.setTextFill(accentColor);
-        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 30));
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 16));
         label.setAlignment(Pos.CENTER);
-        label.setMinWidth(30);
+        label.setMinHeight(26);
+        label.setStyle(GuiTheme.statsValueStyle());
         return label;
     }
 
@@ -366,114 +428,134 @@ public class GameWindow {
         rematchButton.setMaxWidth(Double.MAX_VALUE);
         exitButton.setMaxWidth(Double.MAX_VALUE);
         themeButton.setMaxWidth(Double.MAX_VALUE);
+        fastMoveDelaySwitch.setMaxWidth(Double.MAX_VALUE);
 
-        controlsCard = new VBox(10, controlsTitle, undoButton, newGameButton, rematchButton, exitButton, themeButton);
+        controlsCard = new VBox(
+                10,
+                controlsTitle,
+                undoButton,
+                newGameButton,
+                rematchButton,
+                exitButton,
+                themeButton,
+                fastMoveDelaySwitch);
         controlsCard.setPadding(new Insets(16));
         controlsCard.setMinWidth(180);
         controlsCard.setStyle(GuiTheme.panelStyle());
         return controlsCard;
     }
 
-    private VBox createAiThinkingCard() {
-        aiThinkingTitle = new Label("Move Time");
-        aiThinkingTitle.setTextFill(GuiTheme.text());
-        aiThinkingTitle.setFont(Font.font("Arial", FontWeight.BOLD, 14));
-
-        firstPlayerAiThinkingSection = createAiPlayerThinkingSection(
-                firstPlayerDisplayName,
-                GuiTheme.playerOne(),
-                true);
-        secondPlayerAiThinkingSection = createAiPlayerThinkingSection(
-                secondPlayerDisplayName,
-                GuiTheme.playerTwo(),
-                false);
-
-        aiThinkingMetricLabels = createAiThinkingMetricLabels();
-
-        aiThinkingColumns = new HBox(10, secondPlayerAiThinkingSection, aiThinkingMetricLabels, firstPlayerAiThinkingSection);
-        aiThinkingColumns.setAlignment(Pos.TOP_CENTER);
-        HBox.setHgrow(secondPlayerAiThinkingSection, Priority.ALWAYS);
-        HBox.setHgrow(firstPlayerAiThinkingSection, Priority.ALWAYS);
-
-        aiThinkingCard = new VBox(10,
-                aiThinkingTitle,
-                aiThinkingColumns);
-        aiThinkingCard.setPadding(new Insets(16));
-        aiThinkingCard.setMinWidth(250);
-        aiThinkingCard.setStyle(GuiTheme.panelStyle());
-        updateThinkingTime(0, 0, 0, 0, 0, 0);
-        return aiThinkingCard;
-    }
-
-    private VBox createAiPlayerThinkingSection(String playerName, Color accentColor, boolean isFirstPlayer) {
-        Label playerLabel = new Label(playerName);
-        playerLabel.setTextFill(accentColor);
-        playerLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
-        playerLabel.setWrapText(true);
-
-        Label lastValueLabel = createAiThinkingValueLabel();
-        Label averageValueLabel = createAiThinkingValueLabel();
-        Label maxValueLabel = createAiThinkingValueLabel();
-
-        if (isFirstPlayer) {
-            firstPlayerAiThinkingNameLabel = playerLabel;
-            firstPlayerAiLastThinkingValueLabel = lastValueLabel;
-            firstPlayerAiAverageThinkingValueLabel = averageValueLabel;
-            firstPlayerAiMaxThinkingValueLabel = maxValueLabel;
-        } else {
-            secondPlayerAiThinkingNameLabel = playerLabel;
-            secondPlayerAiLastThinkingValueLabel = lastValueLabel;
-            secondPlayerAiAverageThinkingValueLabel = averageValueLabel;
-            secondPlayerAiMaxThinkingValueLabel = maxValueLabel;
-        }
-
-        VBox section = new VBox(6, playerLabel, lastValueLabel, averageValueLabel, maxValueLabel);
-        section.setAlignment(Pos.TOP_CENTER);
-        section.setMinWidth(76);
-        section.setMaxWidth(Double.MAX_VALUE);
-        return section;
-    }
-
-    private VBox createAiThinkingMetricLabels() {
-        Label spacer = new Label("");
-        spacer.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
-        aiLastThinkingLabel = createAiThinkingMetricLabel("Last");
-        aiAverageThinkingLabel = createAiThinkingMetricLabel("Avg");
-        aiMaxThinkingLabel = createAiThinkingMetricLabel("Max");
-
-        VBox labels = new VBox(6, spacer, aiLastThinkingLabel, aiAverageThinkingLabel, aiMaxThinkingLabel);
-        labels.setAlignment(Pos.TOP_CENTER);
-        labels.setMinWidth(34);
-        return labels;
-    }
-
-    private Label createAiThinkingMetricLabel(String text) {
+    private Label createStatsHeaderLabel(String text, Color accentColor) {
         Label label = new Label(text);
-        GuiTheme.styleMutedLabel(label);
+        label.setTextFill(accentColor);
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
         label.setAlignment(Pos.CENTER);
+        label.setWrapText(true);
+        label.setMinWidth(STATS_PLAYER_COLUMN_WIDTH);
+        label.setPrefWidth(STATS_PLAYER_COLUMN_WIDTH);
+        label.setMaxWidth(STATS_PLAYER_COLUMN_WIDTH);
+        label.setMinHeight(28);
+        label.setStyle(GuiTheme.scoreTeamStyle(accentColor));
         return label;
     }
 
-    private Label createAiThinkingValueLabel() {
+    private HBox createFastMoveDelaySwitchGraphic() {
+        fastModeLabel = new Label("Fast");
+        slowModeLabel = new Label("Slow");
+        fastMoveDelayThumb = new Circle(8);
+        fastMoveDelayTrack = new StackPane(fastMoveDelayThumb);
+
+        HBox switchGraphic = new HBox(8, fastModeLabel, fastMoveDelayTrack, slowModeLabel);
+        switchGraphic.setAlignment(Pos.CENTER);
+        switchGraphic.setMouseTransparent(true);
+        return switchGraphic;
+    }
+
+    private Label createStatsMetricLabel(String text) {
+        Label label = new Label(text);
+        GuiTheme.styleMutedLabel(label);
+        label.setAlignment(Pos.CENTER_LEFT);
+        label.setMinHeight(26);
+        label.setPadding(new Insets(0, 8, 0, 8));
+        label.setStyle(GuiTheme.statsMetricStyle());
+        return label;
+    }
+
+    private void addStatsCell(GridPane grid, Label label, int col, int row, int width) {
+        label.setMinWidth(width);
+        label.setPrefWidth(width);
+        label.setMaxWidth(width);
+        GridPane.setHalignment(label, HPos.CENTER);
+        grid.add(label, col, row);
+    }
+
+    private void setStatsRowVisible(boolean isVisible, Label metricLabel, Label firstPlayerValue, Label secondPlayerValue) {
+        if (metricLabel == null || firstPlayerValue == null || secondPlayerValue == null) {
+            return;
+        }
+
+        metricLabel.setVisible(isVisible);
+        metricLabel.setManaged(isVisible);
+        firstPlayerValue.setVisible(isVisible);
+        firstPlayerValue.setManaged(isVisible);
+        secondPlayerValue.setVisible(isVisible);
+        secondPlayerValue.setManaged(isVisible);
+    }
+
+    private String shortPlayerName(String playerName, String prefix) {
+        String normalizedName = playerName == null || playerName.isBlank() ? prefix : playerName.trim();
+        String compactName = normalizedName
+                .replaceAll("MiniMax D(\\d+) - Fast Move Ordering", "MM$1F")
+                .replaceAll("MiniMax D(\\d+) - Precise Move Ordering", "MM$1P")
+                .replaceAll("MiniMax D(\\d+) - No Move Ordering", "MM$1")
+                .replace("MiniMax", "MM")
+                .replace("Minimax", "MM")
+                .replace("MTCS Easy", "MCTS10K")
+                .replace("MTCS Medium", "MCTS30K")
+                .replace("MTCS Hard", "MCTS60K")
+                .replace("MTCS depth 10,000", "MCTS10K")
+                .replace("MTCS depth 30,000", "MCTS30K")
+                .replace("MTCS depth 60,000", "MCTS60K")
+                .replace("Gym Python", "Gym");
+        if (compactName.length() > 18) {
+            compactName = compactName.substring(0, 17).trim() + ".";
+        }
+        return compactName;
+    }
+
+    private Label createStatsValueLabel() {
         Label label = new Label();
         label.setTextFill(GuiTheme.text());
-        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 14));
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
         label.setAlignment(Pos.CENTER);
-        label.setMinWidth(62);
+        label.setMinHeight(26);
+        label.setStyle(GuiTheme.statsValueStyle());
         return label;
     }
 
     private VBox createFirstPlayerCard() {
         firstPlayerMarker = new Circle(6, GuiTheme.playerOne());
         firstPlayerNameLabel = createPlayerNameLabel(firstPlayerDisplayName);
-        firstPlayerCard = createPlayerCard(firstPlayerMarker, firstPlayerNameLabel, firstPlayerWallsLabel, GuiTheme.playerOne());
+        firstPlayerTurnRow = createTurnStatusRow(GuiTheme.playerOne(), true);
+        firstPlayerCard = createPlayerCard(
+                firstPlayerMarker,
+                firstPlayerNameLabel,
+                firstPlayerWallsLabel,
+                firstPlayerTurnRow,
+                GuiTheme.playerOne());
         return firstPlayerCard;
     }
 
     private VBox createSecondPlayerCard() {
         secondPlayerMarker = new Circle(6, GuiTheme.playerTwo());
         secondPlayerNameLabel = createPlayerNameLabel(secondPlayerDisplayName);
-        secondPlayerCard = createPlayerCard(secondPlayerMarker, secondPlayerNameLabel, secondPlayerWallsLabel, GuiTheme.playerTwo());
+        secondPlayerTurnRow = createTurnStatusRow(GuiTheme.playerTwo(), false);
+        secondPlayerCard = createPlayerCard(
+                secondPlayerMarker,
+                secondPlayerNameLabel,
+                secondPlayerWallsLabel,
+                secondPlayerTurnRow,
+                GuiTheme.playerTwo());
         return secondPlayerCard;
     }
 
@@ -484,18 +566,127 @@ public class GameWindow {
         return nameLabel;
     }
 
-    private VBox createPlayerCard(Circle marker, Label nameLabel, Label wallsLabel, Color accentColor) {
+    private HBox createTurnStatusRow(Color accentColor, boolean isFirstPlayer) {
+        Polygon turnSymbol = new Polygon(0, 0, 0, 12, 11, 6);
+        turnSymbol.setFill(accentColor);
+        turnSymbol.setStroke(Color.WHITE);
+        turnSymbol.setStrokeWidth(1.2);
+
+        Label statusLabel = new Label("Turn");
+        statusLabel.setTextFill(accentColor);
+        statusLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+
+        HBox statusRow = new HBox(7, turnSymbol, statusLabel);
+        statusRow.setAlignment(Pos.CENTER_LEFT);
+        statusRow.setMinHeight(18);
+
+        if (isFirstPlayer) {
+            firstPlayerTurnSymbol = turnSymbol;
+            firstPlayerTurnLabel = statusLabel;
+        } else {
+            secondPlayerTurnSymbol = turnSymbol;
+            secondPlayerTurnLabel = statusLabel;
+        }
+
+        return statusRow;
+    }
+
+    private VBox createPlayerCard(Circle marker, Label nameLabel, Label wallsLabel, HBox turnRow, Color accentColor) {
         marker.setStroke(Color.WHITE);
         marker.setStrokeWidth(2);
 
         HBox titleRow = new HBox(8, marker, nameLabel);
         titleRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox card = new VBox(8, titleRow, wallsLabel);
+        VBox card = new VBox(8, titleRow, wallsLabel, turnRow);
         card.setPadding(new Insets(16));
         card.setMinWidth(180);
         card.setStyle(GuiTheme.playerCardStyle(accentColor));
+        updateTurnIndicators();
         return card;
+    }
+
+    private void updateTurnIndicators() {
+        if (firstPlayerTurnRow == null || secondPlayerTurnRow == null) {
+            return;
+        }
+
+        if (isGameOver) {
+            updateTurnIndicator(
+                    firstPlayerTurnRow,
+                    firstPlayerTurnSymbol,
+                    firstPlayerTurnLabel,
+                    isFirstPlayerWinner,
+                    "Winner",
+                    GuiTheme.playerOne());
+            updateTurnIndicator(
+                    secondPlayerTurnRow,
+                    secondPlayerTurnSymbol,
+                    secondPlayerTurnLabel,
+                    !isFirstPlayerWinner,
+                    "Winner",
+                    GuiTheme.playerTwo());
+        } else {
+            updateTurnIndicator(
+                    firstPlayerTurnRow,
+                    firstPlayerTurnSymbol,
+                    firstPlayerTurnLabel,
+                    isFirstPlayerTurn,
+                    "Turn",
+                    GuiTheme.playerOne());
+            updateTurnIndicator(
+                    secondPlayerTurnRow,
+                    secondPlayerTurnSymbol,
+                    secondPlayerTurnLabel,
+                    !isFirstPlayerTurn,
+                    "Turn",
+                    GuiTheme.playerTwo());
+        }
+
+        if (firstPlayerCard != null) {
+            firstPlayerCard.setStyle(isFirstPlayerHighlighted()
+                    ? GuiTheme.activePlayerCardStyle(GuiTheme.playerOne())
+                    : GuiTheme.playerCardStyle(GuiTheme.playerOne()));
+        }
+        if (secondPlayerCard != null) {
+            secondPlayerCard.setStyle(isSecondPlayerHighlighted()
+                    ? GuiTheme.activePlayerCardStyle(GuiTheme.playerTwo())
+                    : GuiTheme.playerCardStyle(GuiTheme.playerTwo()));
+        }
+    }
+
+    private void updateTurnIndicator(
+            HBox turnRow,
+            Polygon turnSymbol,
+            Label turnLabel,
+            boolean isVisible,
+            String text,
+            Color accentColor) {
+        turnRow.setManaged(isVisible);
+        turnRow.setVisible(isVisible);
+        turnLabel.setText(text);
+        turnLabel.setTextFill(accentColor);
+        turnSymbol.setFill(accentColor);
+    }
+
+    private boolean isFirstPlayerHighlighted() {
+        return isGameOver ? isFirstPlayerWinner : isFirstPlayerTurn;
+    }
+
+    private boolean isSecondPlayerHighlighted() {
+        return isGameOver ? !isFirstPlayerWinner : !isFirstPlayerTurn;
+    }
+
+    private void updateFastMoveDelaySwitch() {
+        boolean slowMode = fastMoveDelaySwitch.isSelected();
+        fastMoveDelaySwitch.setAccessibleText(slowMode ? "Slow" : "Fast");
+        GuiTheme.styleSpeedSwitch(
+                fastMoveDelaySwitch,
+                fastModeLabel,
+                slowModeLabel,
+                fastMoveDelayTrack,
+                fastMoveDelayThumb);
+        fastMoveDelayHandler.accept(slowMode);
     }
 
     private void createBoard() {
@@ -541,53 +732,67 @@ public class GameWindow {
         boardFrame.setStyle(GuiTheme.boardFrameStyle());
         gridPane.setStyle(GuiTheme.boardStyle());
 
-        Color turnColor = isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        if (isGameOver) {
-            turnColor = isFirstPlayerWinner ? GuiTheme.playerOne() : GuiTheme.playerTwo();
-        }
-        GuiTheme.styleTurnLabel(playerTurn, turnColor);
         GuiTheme.styleUndoButton(undoButton);
         GuiTheme.styleCompactButton(newGameButton);
         GuiTheme.styleCompactButton(rematchButton);
         GuiTheme.styleDangerCompactButton(exitButton);
         GuiTheme.styleThemeButton(themeButton);
+        GuiTheme.styleSpeedSwitch(
+                fastMoveDelaySwitch,
+                fastModeLabel,
+                slowModeLabel,
+                fastMoveDelayTrack,
+                fastMoveDelayThumb);
 
         firstPlayerWallsLabel.setTextFill(GuiTheme.playerOne());
         secondPlayerWallsLabel.setTextFill(GuiTheme.playerTwo());
         firstPlayerNameLabel.setTextFill(GuiTheme.text());
         secondPlayerNameLabel.setTextFill(GuiTheme.text());
         controlsTitle.setTextFill(GuiTheme.text());
-        aiThinkingTitle.setTextFill(GuiTheme.text());
-        firstPlayerAiThinkingNameLabel.setTextFill(GuiTheme.playerOne());
-        secondPlayerAiThinkingNameLabel.setTextFill(GuiTheme.playerTwo());
-        aiLastThinkingLabel.setTextFill(GuiTheme.mutedText());
-        aiAverageThinkingLabel.setTextFill(GuiTheme.mutedText());
-        aiMaxThinkingLabel.setTextFill(GuiTheme.mutedText());
-        firstPlayerAiLastThinkingValueLabel.setTextFill(GuiTheme.text());
-        firstPlayerAiAverageThinkingValueLabel.setTextFill(GuiTheme.text());
-        firstPlayerAiMaxThinkingValueLabel.setTextFill(GuiTheme.text());
-        secondPlayerAiLastThinkingValueLabel.setTextFill(GuiTheme.text());
-        secondPlayerAiAverageThinkingValueLabel.setTextFill(GuiTheme.text());
-        secondPlayerAiMaxThinkingValueLabel.setTextFill(GuiTheme.text());
-        firstPlayerScoreNameLabel.setTextFill(GuiTheme.text());
-        secondPlayerScoreNameLabel.setTextFill(GuiTheme.text());
+        List.of(
+                statsMetricHeaderLabel,
+                scoreMetricLabel,
+                averageMoveMetricLabel,
+                longestMoveMetricLabel,
+                averageGameThinkingMetricLabel,
+                averageWallImpactMetricLabel).forEach(label -> {
+            label.setTextFill(GuiTheme.mutedText());
+            label.setStyle(GuiTheme.statsMetricStyle());
+        });
+        List.of(
+                firstPlayerAverageMoveValueLabel,
+                secondPlayerAverageMoveValueLabel,
+                firstPlayerLongestMoveValueLabel,
+                secondPlayerLongestMoveValueLabel,
+                firstPlayerAverageGameThinkingValueLabel,
+                secondPlayerAverageGameThinkingValueLabel,
+                firstPlayerAverageWallImpactValueLabel,
+                secondPlayerAverageWallImpactValueLabel).forEach(label -> {
+            label.setTextFill(GuiTheme.text());
+            label.setStyle(GuiTheme.statsValueStyle());
+        });
+        firstPlayerScoreNameLabel.setTextFill(scoreFirstPlayerColor());
+        secondPlayerScoreNameLabel.setTextFill(scoreSecondPlayerColor());
+        firstPlayerScoreNameLabel.setStyle(GuiTheme.scoreTeamStyle(scoreFirstPlayerColor()));
+        secondPlayerScoreNameLabel.setStyle(GuiTheme.scoreTeamStyle(scoreSecondPlayerColor()));
         firstPlayerScoreValueLabel.setTextFill(scoreFirstPlayerColor());
         secondPlayerScoreValueLabel.setTextFill(scoreSecondPlayerColor());
-        scoreDashLabel.setTextFill(GuiTheme.mutedText());
-        scoreNumbers.setStyle(GuiTheme.scoreNumbersStyle());
+        firstPlayerScoreValueLabel.setStyle(GuiTheme.statsValueStyle());
+        secondPlayerScoreValueLabel.setStyle(GuiTheme.statsValueStyle());
 
-        firstPlayerCard.setStyle(GuiTheme.playerCardStyle(GuiTheme.playerOne()));
-        secondPlayerCard.setStyle(GuiTheme.playerCardStyle(GuiTheme.playerTwo()));
         controlsCard.setStyle(GuiTheme.panelStyle());
-        aiThinkingCard.setStyle(GuiTheme.panelStyle());
-        scoreCard.setStyle(GuiTheme.scoreboardStyle());
+        matchStatsCard.setStyle(GuiTheme.scoreboardStyle());
         firstPlayerMarker.setFill(GuiTheme.playerOne());
         secondPlayerMarker.setFill(GuiTheme.playerTwo());
+        firstPlayerTurnSymbol.setStroke(Color.WHITE);
+        secondPlayerTurnSymbol.setStroke(Color.WHITE);
 
         firstPlayerPawn.setFill(GuiTheme.playerOne());
         firstPlayerPawn.setEffect(GuiTheme.softShadow(GuiTheme.playerOne()));
         secondPlayerPawn.setFill(GuiTheme.playerTwo());
         secondPlayerPawn.setEffect(GuiTheme.softShadow(GuiTheme.playerTwo()));
+
+        updateTurnIndicators();
 
         for (int index = 0; index < boardCells.size(); index++) {
             Rectangle cell = boardCells.get(index);
@@ -628,8 +833,7 @@ public class GameWindow {
             }
         }
 
-        playerTurn.setText(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
-        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
+        updateTurnIndicators();
     }
 
     public void draw(Move move) {
@@ -641,8 +845,7 @@ public class GameWindow {
 
         boolean firstPlayerMoved = isBottomPlayer(move.getPlayer());
         isFirstPlayerTurn = !firstPlayerMoved;
-        playerTurn.setText(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
-        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
+        updateTurnIndicators();
     }
 
     public void drawPerformanceMove(int moveCode, boolean isPlayerAMove, int wallsLeft) {
@@ -653,8 +856,7 @@ public class GameWindow {
         }
 
         isFirstPlayerTurn = !isPlayerAMove;
-        playerTurn.setText(isFirstPlayerTurn ? firstPlayerDisplayName + "'s turn" : secondPlayerDisplayName + "'s turn");
-        GuiTheme.styleTurnLabel(playerTurn, isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo());
+        updateTurnIndicators();
     }
 
     private void drawPawn(Move move) {
@@ -774,16 +976,8 @@ public class GameWindow {
         return player.getFinishRow() == 0;
     }
 
-    private String playerDisplayName(Player player) {
-        return isBottomPlayer(player) ? firstPlayerDisplayName : secondPlayerDisplayName;
-    }
-
-    private String playerDisplayName(boolean isPlayerA) {
-        return isPlayerA ? firstPlayerDisplayName : secondPlayerDisplayName;
-    }
-
-    private String formatThinkingTime(long thinkingTimeNanos) {
-        if (thinkingTimeNanos <= 0) {
+    private String formatThinkingTime(double thinkingTimeNanos) {
+        if (Double.isNaN(thinkingTimeNanos) || thinkingTimeNanos <= 0) {
             return "--";
         }
 
@@ -795,5 +989,15 @@ public class GameWindow {
             return String.format(Locale.US, "%.0f ms", milliseconds);
         }
         return String.format(Locale.US, "%.2f s", milliseconds / 1000.0);
+    }
+
+    private String formatImpact(double impact) {
+        if (Double.isNaN(impact)) {
+            return "--";
+        }
+        if (Math.abs(impact) < 0.05) {
+            return "0.0";
+        }
+        return String.format(Locale.US, "%+.1f", impact);
     }
 }

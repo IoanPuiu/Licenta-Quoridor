@@ -1,18 +1,23 @@
 package GUI;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.CornerRadii;
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 
@@ -91,6 +96,17 @@ final class GuiTheme {
                 """.formatted(hex(activeTheme.palette.panel()), hex(accentColor));
     }
 
+    static String activePlayerCardStyle(Color accentColor) {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 8;
+                -fx-border-color: %s;
+                -fx-border-radius: 8;
+                -fx-border-width: 2 2 2 6;
+                -fx-effect: dropshadow(gaussian, rgba(38, 48, 44, 0.24), 18, 0.18, 0, 7);
+                """.formatted(hex(activeTheme.palette.panel()), hex(accentColor));
+    }
+
     static String scoreboardStyle() {
         return """
                 -fx-background-color: %s;
@@ -122,6 +138,28 @@ final class GuiTheme {
                 -fx-border-width: 0 0 3 0;
                 -fx-padding: 8 6 8 6;
                 """.formatted(hex(activeTheme.palette.inputBackground()), hex(accentColor));
+    }
+
+    static String statsMetricStyle() {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1;
+                -fx-padding: 5 8 5 8;
+                """.formatted(hex(activeTheme.palette.inputBackground()), hex(activeTheme.palette.panelBorder()));
+    }
+
+    static String statsValueStyle() {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1;
+                -fx-padding: 5 8 5 8;
+                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.panelBorder()));
     }
 
     static String comboBoxStyle() {
@@ -223,6 +261,52 @@ final class GuiTheme {
         button.setOnMouseExited(event -> button.setStyle(themeButtonStyle(activeTheme.palette.themeButton())));
     }
 
+    static void styleSpeedSwitch(
+            ToggleButton button,
+            Label fastLabel,
+            Label slowLabel,
+            StackPane switchTrack,
+            Circle switchThumb) {
+        boolean slowMode = button.isSelected();
+
+        button.setMinHeight(38);
+        button.setPrefHeight(38);
+        button.setMaxHeight(38);
+        button.setStyle(speedSwitchButtonStyle(slowMode, false));
+        button.setOnMouseEntered(event -> button.setStyle(speedSwitchButtonStyle(button.isSelected(), true)));
+        button.setOnMouseExited(event -> button.setStyle(speedSwitchButtonStyle(button.isSelected(), false)));
+
+        fastLabel.setMinWidth(38);
+        fastLabel.setAlignment(Pos.CENTER);
+        fastLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+        fastLabel.setTextFill(slowMode ? mutedText() : activeTheme.palette.primaryButton());
+
+        slowLabel.setMinWidth(38);
+        slowLabel.setAlignment(Pos.CENTER);
+        slowLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+        slowLabel.setTextFill(slowMode ? activeTheme.palette.primaryButton() : mutedText());
+
+        switchTrack.setMinSize(44, 22);
+        switchTrack.setPrefSize(44, 22);
+        switchTrack.setMaxSize(44, 22);
+        switchTrack.setPadding(new Insets(3));
+        switchTrack.setAlignment(slowMode ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        switchTrack.setStyle(speedSwitchTrackStyle(slowMode));
+
+        switchThumb.setRadius(8);
+        switchThumb.setFill(slowMode ? Color.WHITE : activeTheme.palette.primaryButton());
+        switchThumb.setStroke(activeTheme.palette.panel());
+        switchThumb.setStrokeWidth(1);
+    }
+
+    static void styleSegmentButton(ToggleButton button) {
+        button.setMinHeight(38);
+        button.setMaxHeight(38);
+        button.setStyle(segmentButtonStyle(button.isSelected(), false));
+        button.setOnMouseEntered(event -> button.setStyle(segmentButtonStyle(button.isSelected(), true)));
+        button.setOnMouseExited(event -> button.setStyle(segmentButtonStyle(button.isSelected(), false)));
+    }
+
     static void styleComboBox(ComboBox<?> comboBox) {
         comboBox.setPrefWidth(280);
         comboBox.setMinHeight(38);
@@ -240,6 +324,12 @@ final class GuiTheme {
         spinner.setMinHeight(38);
         spinner.setStyle(comboBoxStyle());
         spinner.getEditor().setStyle(comboBoxStyle());
+    }
+
+    static void styleCheckBox(CheckBox checkBox) {
+        checkBox.setTextFill(text());
+        checkBox.setFont(Font.font("Arial", FontWeight.BOLD, 13));
+        checkBox.setStyle("-fx-cursor: hand;");
     }
 
     static void styleWindowTitle(Label label, int size) {
@@ -309,6 +399,75 @@ final class GuiTheme {
                 hex(backgroundColor),
                 hex(activeTheme.palette.inputBorder()),
                 hex(activeTheme.palette.text()));
+    }
+
+    private static String speedSwitchButtonStyle(boolean slowMode, boolean isHovering) {
+        Color backgroundColor = isHovering
+                ? activeTheme.palette.themeButtonHover()
+                : activeTheme.palette.themeButton();
+        Color borderColor = slowMode
+                ? activeTheme.palette.primaryButton()
+                : activeTheme.palette.inputBorder();
+
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1.5;
+                -fx-padding: 7 14 7 14;
+                -fx-cursor: hand;
+                """.formatted(hex(backgroundColor), hex(borderColor));
+    }
+
+    private static String speedSwitchTrackStyle(boolean slowMode) {
+        Color backgroundColor = slowMode
+                ? activeTheme.palette.primaryButton()
+                : activeTheme.palette.inputBackground();
+        Color borderColor = slowMode
+                ? activeTheme.palette.primaryButtonHover()
+                : activeTheme.palette.inputBorder();
+
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 999;
+                -fx-border-color: %s;
+                -fx-border-radius: 999;
+                -fx-border-width: 1;
+                """.formatted(hex(backgroundColor), hex(borderColor));
+    }
+
+    private static String segmentButtonStyle(boolean isSelected, boolean isHovering) {
+        Color backgroundColor;
+        Color borderColor;
+        Color textColor;
+
+        if (isSelected) {
+            backgroundColor = isHovering
+                    ? activeTheme.palette.primaryButtonHover()
+                    : activeTheme.palette.primaryButton();
+            borderColor = activeTheme.palette.primaryButtonHover();
+            textColor = Color.WHITE;
+        } else {
+            backgroundColor = isHovering
+                    ? activeTheme.palette.themeButtonHover()
+                    : activeTheme.palette.inputBackground();
+            borderColor = activeTheme.palette.inputBorder();
+            textColor = activeTheme.palette.text();
+        }
+
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1.5;
+                -fx-text-fill: %s;
+                -fx-font-size: 12px;
+                -fx-font-weight: bold;
+                -fx-padding: 8 10 8 10;
+                -fx-cursor: hand;
+                """.formatted(hex(backgroundColor), hex(borderColor), hex(textColor));
     }
 
     private static String hex(Color color) {
