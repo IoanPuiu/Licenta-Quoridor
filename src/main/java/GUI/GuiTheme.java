@@ -5,6 +5,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
@@ -20,8 +21,13 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.text.TextAlignment;
 
 final class GuiTheme {
+
+    static final int PANEL_TITLE_HEIGHT = 24;
+    static final int PANEL_CONTENT_PADDING = 7;
+    static final int PANEL_ELEMENT_GAP = 7;
 
     private static ThemeOption activeTheme = ThemeOption.FOREST_COURT;
 
@@ -80,9 +86,9 @@ final class GuiTheme {
                 -fx-background-radius: 8;
                 -fx-border-color: %s;
                 -fx-border-radius: 8;
-                -fx-border-width: 1;
+                -fx-border-width: 2;
                 -fx-effect: dropshadow(gaussian, rgba(38, 48, 44, 0.16), 18, 0.15, 0, 6);
-                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.panelBorder()));
+                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.boardFrameBorder()));
     }
 
     static String playerCardStyle(Color accentColor) {
@@ -115,7 +121,7 @@ final class GuiTheme {
                 -fx-border-radius: 8;
                 -fx-border-width: 2;
                 -fx-effect: dropshadow(gaussian, rgba(38, 48, 44, 0.22), 18, 0.16, 0, 7);
-                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.wall()));
+                """.formatted(hex(activeTheme.palette.panel()), hex(activeTheme.palette.boardFrameBorder()));
     }
 
     static String scoreNumbersStyle() {
@@ -193,12 +199,16 @@ final class GuiTheme {
     }
 
     static MenuButton createThemeMenu(Runnable themeChangedHandler) {
-        MenuButton themeButton = new MenuButton("Theme: " + activeTheme.label);
+        return createThemeMenu(themeChangedHandler, true);
+    }
+
+    static MenuButton createThemeMenu(Runnable themeChangedHandler, boolean showSelectedThemeName) {
+        MenuButton themeButton = new MenuButton(themeMenuText(showSelectedThemeName));
         for (ThemeOption theme : ThemeOption.values()) {
             MenuItem item = new MenuItem(theme.label);
             item.setOnAction(event -> {
                 activeTheme = theme;
-                themeButton.setText("Theme: " + activeTheme.label);
+                themeButton.setText(themeMenuText(showSelectedThemeName));
                 styleThemeButton(themeButton);
                 if (themeChangedHandler != null) {
                     themeChangedHandler.run();
@@ -208,6 +218,10 @@ final class GuiTheme {
         }
         styleThemeButton(themeButton);
         return themeButton;
+    }
+
+    private static String themeMenuText(boolean showSelectedThemeName) {
+        return showSelectedThemeName ? "Theme: " + activeTheme.label : "Theme";
     }
 
     static void stylePrimaryButton(Button button) {
@@ -261,6 +275,55 @@ final class GuiTheme {
         button.setOnMouseExited(event -> button.setStyle(themeButtonStyle(activeTheme.palette.themeButton())));
     }
 
+    static void styleToolbarButton(Button button) {
+        button.setMinHeight(30);
+        button.setPrefHeight(30);
+        button.setMaxHeight(30);
+        button.setStyle(toolbarButtonStyle(activeTheme.palette.primaryButton()));
+        button.setOnMouseEntered(event -> {
+            if (!button.isDisabled()) {
+                button.setStyle(toolbarButtonStyle(activeTheme.palette.primaryButtonHover()));
+            }
+        });
+        button.setOnMouseExited(event -> button.setStyle(toolbarButtonStyle(activeTheme.palette.primaryButton())));
+    }
+
+    static void styleToolbarUndoButton(Button button) {
+        button.setMinHeight(30);
+        button.setPrefHeight(30);
+        button.setMaxHeight(30);
+        button.setStyle(toolbarButtonStyle(activeTheme.palette.undoButton()));
+        button.setOnMouseEntered(event -> {
+            if (!button.isDisabled()) {
+                button.setStyle(toolbarButtonStyle(activeTheme.palette.undoButtonHover()));
+            }
+        });
+        button.setOnMouseExited(event -> button.setStyle(toolbarButtonStyle(activeTheme.palette.undoButton())));
+    }
+
+    static void styleToolbarDangerButton(Button button) {
+        button.setMinHeight(30);
+        button.setPrefHeight(30);
+        button.setMaxHeight(30);
+        button.setStyle(toolbarButtonStyle(activeTheme.palette.danger()));
+        button.setOnMouseEntered(event -> {
+            if (!button.isDisabled()) {
+                button.setStyle(toolbarButtonStyle(activeTheme.palette.danger().deriveColor(0, 1, 0.82, 1)));
+            }
+        });
+        button.setOnMouseExited(event -> button.setStyle(toolbarButtonStyle(activeTheme.palette.danger())));
+    }
+
+    static void styleToolbarThemeButton(MenuButton button) {
+        button.setAlignment(Pos.CENTER);
+        button.setContentDisplay(ContentDisplay.CENTER);
+        button.setTextAlignment(TextAlignment.CENTER);
+        button.setMnemonicParsing(false);
+        button.setStyle(toolbarThemeButtonStyle(activeTheme.palette.themeButton()));
+        button.setOnMouseEntered(event -> button.setStyle(toolbarThemeButtonStyle(activeTheme.palette.themeButtonHover())));
+        button.setOnMouseExited(event -> button.setStyle(toolbarThemeButtonStyle(activeTheme.palette.themeButton())));
+    }
+
     static void styleSpeedSwitch(
             ToggleButton button,
             Label fastLabel,
@@ -294,6 +357,44 @@ final class GuiTheme {
         switchTrack.setStyle(speedSwitchTrackStyle(slowMode));
 
         switchThumb.setRadius(8);
+        switchThumb.setFill(slowMode ? Color.WHITE : activeTheme.palette.primaryButton());
+        switchThumb.setStroke(activeTheme.palette.panel());
+        switchThumb.setStrokeWidth(1);
+    }
+
+    static void styleToolbarSpeedSwitch(
+            ToggleButton button,
+            Label fastLabel,
+            Label slowLabel,
+            StackPane switchTrack,
+            Circle switchThumb) {
+        boolean slowMode = button.isSelected();
+
+        button.setMinHeight(30);
+        button.setPrefHeight(30);
+        button.setMaxHeight(30);
+        button.setStyle(toolbarSpeedSwitchButtonStyle(slowMode, false));
+        button.setOnMouseEntered(event -> button.setStyle(toolbarSpeedSwitchButtonStyle(button.isSelected(), true)));
+        button.setOnMouseExited(event -> button.setStyle(toolbarSpeedSwitchButtonStyle(button.isSelected(), false)));
+
+        fastLabel.setMinWidth(24);
+        fastLabel.setAlignment(Pos.CENTER);
+        fastLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 11));
+        fastLabel.setTextFill(slowMode ? mutedText() : activeTheme.palette.primaryButton());
+
+        slowLabel.setMinWidth(24);
+        slowLabel.setAlignment(Pos.CENTER);
+        slowLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 11));
+        slowLabel.setTextFill(slowMode ? activeTheme.palette.primaryButton() : mutedText());
+
+        switchTrack.setMinSize(32, 18);
+        switchTrack.setPrefSize(32, 18);
+        switchTrack.setMaxSize(32, 18);
+        switchTrack.setPadding(new Insets(2));
+        switchTrack.setAlignment(slowMode ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+        switchTrack.setStyle(speedSwitchTrackStyle(slowMode));
+
+        switchThumb.setRadius(6.5);
         switchThumb.setFill(slowMode ? Color.WHITE : activeTheme.palette.primaryButton());
         switchThumb.setStroke(activeTheme.palette.panel());
         switchThumb.setStrokeWidth(1);
@@ -337,6 +438,20 @@ final class GuiTheme {
         label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, size));
     }
 
+    static void stylePanelTitle(Label label) {
+        label.setTextFill(Color.WHITE);
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
+        label.setAlignment(Pos.CENTER);
+        label.setMinHeight(PANEL_TITLE_HEIGHT);
+        label.setPrefHeight(PANEL_TITLE_HEIGHT);
+        label.setMaxHeight(PANEL_TITLE_HEIGHT);
+        label.setMaxWidth(Double.MAX_VALUE);
+        label.setBackground(new Background(new BackgroundFill(
+                boardFrame(),
+                new CornerRadii(8, 8, 0, 0, false),
+                Insets.EMPTY)));
+    }
+
     static void styleMutedLabel(Label label) {
         label.setTextFill(mutedText());
         label.setFont(Font.font("Arial", FontWeight.BOLD, 13));
@@ -361,26 +476,45 @@ final class GuiTheme {
         return """
                 -fx-background-color: %s;
                 -fx-background-radius: 6;
+                -fx-border-color: %s;
                 -fx-border-radius: 6;
+                -fx-border-width: 1;
                 -fx-text-fill: white;
                 -fx-font-size: 15px;
                 -fx-font-weight: bold;
                 -fx-padding: 10 22 10 22;
                 -fx-cursor: hand;
-                """.formatted(hex(backgroundColor));
+                """.formatted(hex(backgroundColor), hex(buttonBorder(backgroundColor)));
     }
 
     private static String compactButtonStyle(Color backgroundColor) {
         return """
                 -fx-background-color: %s;
                 -fx-background-radius: 6;
+                -fx-border-color: %s;
                 -fx-border-radius: 6;
+                -fx-border-width: 1;
                 -fx-text-fill: white;
                 -fx-font-size: 13px;
                 -fx-font-weight: bold;
                 -fx-padding: 8 14 8 14;
                 -fx-cursor: hand;
-                """.formatted(hex(backgroundColor));
+                """.formatted(hex(backgroundColor), hex(buttonBorder(backgroundColor)));
+    }
+
+    private static String toolbarButtonStyle(Color backgroundColor) {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1;
+                -fx-text-fill: white;
+                -fx-font-size: 11px;
+                -fx-font-weight: bold;
+                -fx-padding: 5 8 5 8;
+                -fx-cursor: hand;
+                """.formatted(hex(backgroundColor), hex(buttonBorder(backgroundColor)));
     }
 
     private static String themeButtonStyle(Color backgroundColor) {
@@ -394,6 +528,25 @@ final class GuiTheme {
                 -fx-font-size: 13px;
                 -fx-font-weight: bold;
                 -fx-padding: 8 14 8 14;
+                -fx-cursor: hand;
+                """.formatted(
+                hex(backgroundColor),
+                hex(activeTheme.palette.inputBorder()),
+                hex(activeTheme.palette.text()));
+    }
+
+    private static String toolbarThemeButtonStyle(Color backgroundColor) {
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1;
+                -fx-text-fill: %s;
+                -fx-font-size: 11px;
+                -fx-font-weight: bold;
+                -fx-alignment: center;
+                -fx-padding: 0 8 0 8;
                 -fx-cursor: hand;
                 """.formatted(
                 hex(backgroundColor),
@@ -416,6 +569,25 @@ final class GuiTheme {
                 -fx-border-radius: 6;
                 -fx-border-width: 1.5;
                 -fx-padding: 7 14 7 14;
+                -fx-cursor: hand;
+                """.formatted(hex(backgroundColor), hex(borderColor));
+    }
+
+    private static String toolbarSpeedSwitchButtonStyle(boolean slowMode, boolean isHovering) {
+        Color backgroundColor = isHovering
+                ? activeTheme.palette.themeButtonHover()
+                : activeTheme.palette.themeButton();
+        Color borderColor = slowMode
+                ? activeTheme.palette.primaryButton()
+                : activeTheme.palette.inputBorder();
+
+        return """
+                -fx-background-color: %s;
+                -fx-background-radius: 6;
+                -fx-border-color: %s;
+                -fx-border-radius: 6;
+                -fx-border-width: 1.2;
+                -fx-padding: 4 6 4 6;
                 -fx-cursor: hand;
                 """.formatted(hex(backgroundColor), hex(borderColor));
     }
@@ -475,6 +647,10 @@ final class GuiTheme {
                 Math.round(color.getRed() * 255),
                 Math.round(color.getGreen() * 255),
                 Math.round(color.getBlue() * 255));
+    }
+
+    private static Color buttonBorder(Color backgroundColor) {
+        return backgroundColor.deriveColor(0, 1, 0.78, 1);
     }
 
     private enum ThemeOption {

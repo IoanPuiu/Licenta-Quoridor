@@ -1,0 +1,184 @@
+package GUI;
+
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Label;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+
+final class PlayersPanel {
+    private static final int INITIAL_WALLS = 10;
+    static final int HEIGHT = 104;
+    private static final int CONTENT_HEIGHT = HEIGHT - GuiTheme.PANEL_TITLE_HEIGHT;
+    private static final int CONTENT_PADDING = GuiTheme.PANEL_CONTENT_PADDING;
+    private static final int CARD_GAP = GuiTheme.PANEL_ELEMENT_GAP;
+    private static final int CARD_WIDTH = (StatsPanel.WIDTH - CONTENT_PADDING * 2 - CARD_GAP) / 2;
+    private static final int CARD_HEIGHT = CONTENT_HEIGHT - CONTENT_PADDING * 2;
+
+    private final VBox view;
+    private final Label titleLabel;
+    private final HBox cardsRow;
+    private final VBox firstPlayerCard;
+    private final VBox secondPlayerCard;
+    private final Label firstPlayerNameLabel;
+    private final Label secondPlayerNameLabel;
+    private final Circle firstPlayerMarker;
+    private final Circle secondPlayerMarker;
+    private final Label firstPlayerWallsLabel;
+    private final Label secondPlayerWallsLabel;
+    private boolean isFirstPlayerTurn;
+    private boolean isFirstPlayerWinner;
+    private boolean isGameOver;
+
+    PlayersPanel(String firstPlayerDisplayName, String secondPlayerDisplayName, boolean isFirstPlayerStarting) {
+        this.isFirstPlayerTurn = isFirstPlayerStarting;
+        this.isGameOver = false;
+        this.titleLabel = new Label("Players");
+        this.firstPlayerMarker = new Circle(6, GuiTheme.playerOne());
+        this.secondPlayerMarker = new Circle(6, GuiTheme.playerTwo());
+        this.firstPlayerNameLabel = createPlayerNameLabel(shortPlayerName(firstPlayerDisplayName, "First"));
+        this.secondPlayerNameLabel = createPlayerNameLabel(shortPlayerName(secondPlayerDisplayName, "Second"));
+        this.firstPlayerWallsLabel = createWallsLabel(GuiTheme.playerOne());
+        this.secondPlayerWallsLabel = createWallsLabel(GuiTheme.playerTwo());
+        this.firstPlayerCard = createPlayerCard(
+                firstPlayerMarker,
+                firstPlayerNameLabel,
+                firstPlayerWallsLabel,
+                GuiTheme.playerOne());
+        this.secondPlayerCard = createPlayerCard(
+                secondPlayerMarker,
+                secondPlayerNameLabel,
+                secondPlayerWallsLabel,
+                GuiTheme.playerTwo());
+
+        cardsRow = new HBox(CARD_GAP, firstPlayerCard, secondPlayerCard);
+        cardsRow.setAlignment(Pos.CENTER);
+        cardsRow.setPadding(new Insets(CONTENT_PADDING));
+        cardsRow.setMinHeight(CONTENT_HEIGHT);
+        cardsRow.setPrefHeight(CONTENT_HEIGHT);
+        cardsRow.setMaxHeight(CONTENT_HEIGHT);
+
+        view = new VBox(titleLabel, cardsRow);
+        view.setAlignment(Pos.TOP_CENTER);
+        view.setMinWidth(StatsPanel.WIDTH);
+        view.setPrefWidth(StatsPanel.WIDTH);
+        view.setMaxWidth(StatsPanel.WIDTH);
+        view.setMinHeight(HEIGHT);
+        view.setPrefHeight(HEIGHT);
+        view.setMaxHeight(HEIGHT);
+        applyTheme();
+    }
+
+    VBox view() {
+        return view;
+    }
+
+    void updateWalls(int firstPlayerWalls, int secondPlayerWalls) {
+        firstPlayerWallsLabel.setText(firstPlayerWalls + " walls");
+        secondPlayerWallsLabel.setText(secondPlayerWalls + " walls");
+    }
+
+    void updateWall(boolean isFirstPlayer, int wallsLeft) {
+        if (isFirstPlayer) {
+            firstPlayerWallsLabel.setText(wallsLeft + " walls");
+        } else {
+            secondPlayerWallsLabel.setText(wallsLeft + " walls");
+        }
+    }
+
+    void updateTurnState(boolean isFirstPlayerTurn, boolean isGameOver, boolean isFirstPlayerWinner) {
+        this.isFirstPlayerTurn = isFirstPlayerTurn;
+        this.isGameOver = isGameOver;
+        this.isFirstPlayerWinner = isFirstPlayerWinner;
+        updateTurnIndicators();
+    }
+
+    void applyTheme() {
+        view.setStyle(GuiTheme.panelStyle());
+        GuiTheme.stylePanelTitle(titleLabel);
+        cardsRow.setMinHeight(CONTENT_HEIGHT);
+        cardsRow.setPrefHeight(CONTENT_HEIGHT);
+        cardsRow.setMaxHeight(CONTENT_HEIGHT);
+        firstPlayerWallsLabel.setTextFill(GuiTheme.playerOne());
+        secondPlayerWallsLabel.setTextFill(GuiTheme.playerTwo());
+        firstPlayerNameLabel.setTextFill(GuiTheme.text());
+        secondPlayerNameLabel.setTextFill(GuiTheme.text());
+        firstPlayerMarker.setFill(GuiTheme.playerOne());
+        secondPlayerMarker.setFill(GuiTheme.playerTwo());
+        updateTurnIndicators();
+    }
+
+    private Label createWallsLabel(Color color) {
+        Label label = new Label(INITIAL_WALLS + " walls");
+        label.setTextFill(color);
+        label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 16));
+        return label;
+    }
+
+    private Label createPlayerNameLabel(String playerName) {
+        Label nameLabel = new Label(playerName);
+        nameLabel.setTextFill(GuiTheme.text());
+        nameLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 12));
+        nameLabel.setWrapText(true);
+        nameLabel.setMaxWidth(108);
+        return nameLabel;
+    }
+
+    private VBox createPlayerCard(Circle marker, Label nameLabel, Label wallsLabel, Color accentColor) {
+        marker.setStroke(Color.WHITE);
+        marker.setStrokeWidth(2);
+
+        HBox titleRow = new HBox(9, marker, nameLabel);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox card = new VBox(5, titleRow, wallsLabel);
+        card.setPadding(new Insets(7, 8, 7, 8));
+        card.setMinSize(CARD_WIDTH, CARD_HEIGHT);
+        card.setPrefSize(CARD_WIDTH, CARD_HEIGHT);
+        card.setMaxSize(CARD_WIDTH, CARD_HEIGHT);
+        card.setStyle(GuiTheme.playerCardStyle(accentColor));
+        return card;
+    }
+
+    private void updateTurnIndicators() {
+        firstPlayerCard.setStyle(isFirstPlayerHighlighted()
+                ? GuiTheme.activePlayerCardStyle(GuiTheme.playerOne())
+                : GuiTheme.playerCardStyle(GuiTheme.playerOne()));
+        secondPlayerCard.setStyle(isSecondPlayerHighlighted()
+                ? GuiTheme.activePlayerCardStyle(GuiTheme.playerTwo())
+                : GuiTheme.playerCardStyle(GuiTheme.playerTwo()));
+    }
+
+    private boolean isFirstPlayerHighlighted() {
+        return isGameOver ? isFirstPlayerWinner : isFirstPlayerTurn;
+    }
+
+    private boolean isSecondPlayerHighlighted() {
+        return isGameOver ? !isFirstPlayerWinner : !isFirstPlayerTurn;
+    }
+
+    private String shortPlayerName(String playerName, String prefix) {
+        String normalizedName = playerName == null || playerName.isBlank() ? prefix : playerName.trim();
+        String compactName = normalizedName
+                .replaceAll("MiniMax D(\\d+) - Fast Move Ordering", "MM$1F")
+                .replaceAll("MiniMax D(\\d+) - Precise Move Ordering", "MM$1P")
+                .replaceAll("MiniMax D(\\d+) - No Move Ordering", "MM$1")
+                .replace("MiniMax", "MM")
+                .replace("Minimax", "MM")
+                .replace("MTCS Easy", "MCTS10K")
+                .replace("MTCS Medium", "MCTS30K")
+                .replace("MTCS Hard", "MCTS60K")
+                .replace("MTCS depth 10,000", "MCTS10K")
+                .replace("MTCS depth 30,000", "MCTS30K")
+                .replace("MTCS depth 60,000", "MCTS60K")
+                .replace("Gym Python", "Gym");
+        if (compactName.length() > 18) {
+            compactName = compactName.substring(0, 17).trim() + ".";
+        }
+        return compactName;
+    }
+}

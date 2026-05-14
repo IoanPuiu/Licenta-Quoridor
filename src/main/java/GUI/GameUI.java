@@ -35,9 +35,18 @@ public class GameUI extends Application {
     private String scoreSecondPlayerDisplayName;
     private int scoreFirstPlayerWins;
     private int scoreSecondPlayerWins;
+    private int scoreFirstPlayerFirstRoleGames;
+    private int scoreFirstPlayerFirstRoleWins;
+    private int scoreFirstPlayerSecondRoleGames;
+    private int scoreFirstPlayerSecondRoleWins;
+    private int scoreSecondPlayerFirstRoleGames;
+    private int scoreSecondPlayerFirstRoleWins;
+    private int scoreSecondPlayerSecondRoleGames;
+    private int scoreSecondPlayerSecondRoleWins;
     private int completedMatches;
     private int scoredGameToken = -1;
     private PlayerProfile scoredWinnerProfile;
+    private boolean scoredGameFirstPlayerStarted;
     private ThinkingStats accumulatedThinkingStats = ThinkingStats.empty();
     private ThinkingStats currentGameThinkingStats = ThinkingStats.empty();
     private PauseTransition automaticRematchDelay;
@@ -91,6 +100,7 @@ public class GameUI extends Application {
         int gameToken = ++activeGameToken;
         scoredGameToken = -1;
         scoredWinnerProfile = null;
+        scoredGameFirstPlayerStarted = false;
         fastMoveDelayEnabled = false;
 
         gameWindow = new GameWindow(
@@ -381,9 +391,11 @@ public class GameUI extends Application {
         scoreSecondPlayerDisplayName = secondPlayerProfile.displayName("Second Player");
         scoreFirstPlayerWins = 0;
         scoreSecondPlayerWins = 0;
+        resetWinRateStats();
         completedMatches = 0;
         scoredGameToken = -1;
         scoredWinnerProfile = null;
+        scoredGameFirstPlayerStarted = false;
         resetThinkingStats();
     }
 
@@ -402,10 +414,23 @@ public class GameUI extends Application {
         scoreSecondPlayerDisplayName = null;
         scoreFirstPlayerWins = 0;
         scoreSecondPlayerWins = 0;
+        resetWinRateStats();
         completedMatches = 0;
         scoredGameToken = -1;
         scoredWinnerProfile = null;
+        scoredGameFirstPlayerStarted = false;
         resetThinkingStats();
+    }
+
+    private void resetWinRateStats() {
+        scoreFirstPlayerFirstRoleGames = 0;
+        scoreFirstPlayerFirstRoleWins = 0;
+        scoreFirstPlayerSecondRoleGames = 0;
+        scoreFirstPlayerSecondRoleWins = 0;
+        scoreSecondPlayerFirstRoleGames = 0;
+        scoreSecondPlayerFirstRoleWins = 0;
+        scoreSecondPlayerSecondRoleGames = 0;
+        scoreSecondPlayerSecondRoleWins = 0;
     }
 
     private void resetThinkingStats() {
@@ -430,10 +455,14 @@ public class GameUI extends Application {
                 displayStats.bottomMaxNanos(),
                 averageNanosPerCompletedMatch(completedStats.bottomTotalThinkingNanos()),
                 averageImpactPerCompletedMatch(completedStats.bottomWallImpactTotal()),
+                winRate(scoreFirstPlayerFirstRoleWins, scoreFirstPlayerFirstRoleGames),
+                winRate(scoreFirstPlayerSecondRoleWins, scoreFirstPlayerSecondRoleGames),
                 displayStats.topAverageNanos(),
                 displayStats.topMaxNanos(),
                 averageNanosPerCompletedMatch(completedStats.topTotalThinkingNanos()),
-                averageImpactPerCompletedMatch(completedStats.topWallImpactTotal()));
+                averageImpactPerCompletedMatch(completedStats.topWallImpactTotal()),
+                winRate(scoreSecondPlayerFirstRoleWins, scoreSecondPlayerFirstRoleGames),
+                winRate(scoreSecondPlayerSecondRoleWins, scoreSecondPlayerSecondRoleGames));
     }
 
     private ThinkingStats completedThinkingStats() {
@@ -452,6 +481,10 @@ public class GameUI extends Application {
         return completedMatches == 0 ? Double.NaN : totalImpact / (double) completedMatches;
     }
 
+    private double winRate(int wins, int games) {
+        return games == 0 ? Double.NaN : wins * 100.0 / games;
+    }
+
     private ThinkingStats appendMoveStats(
             ThinkingStats stats,
             boolean isPlayerAMove,
@@ -468,9 +501,10 @@ public class GameUI extends Application {
     private void recordGameResult(int gameToken, Player winner) {
         PlayerProfile winnerProfile = winnerProfile(winner);
         if (scoredGameToken != gameToken) {
-            addWin(winnerProfile);
+            addWin(winnerProfile, isFirstPlayerStarting);
             scoredGameToken = gameToken;
             scoredWinnerProfile = winnerProfile;
+            scoredGameFirstPlayerStarted = isFirstPlayerStarting;
         }
 
         gameWindow.showGameResult(winner, scoreFirstPlayerWins, scoreSecondPlayerWins);
@@ -481,9 +515,10 @@ public class GameUI extends Application {
     private void recordPerformanceGameResult(int gameToken, boolean isPlayerAWinner) {
         PlayerProfile winnerProfile = isPlayerAWinner ? firstPlayerProfile : secondPlayerProfile;
         if (scoredGameToken != gameToken) {
-            addWin(winnerProfile);
+            addWin(winnerProfile, isFirstPlayerStarting);
             scoredGameToken = gameToken;
             scoredWinnerProfile = winnerProfile;
+            scoredGameFirstPlayerStarted = isFirstPlayerStarting;
         }
 
         gameWindow.showPerformanceGameResult(isPlayerAWinner, scoreFirstPlayerWins, scoreSecondPlayerWins);
@@ -495,13 +530,37 @@ public class GameUI extends Application {
         return isBottomPlayer(winner) ? firstPlayerProfile : secondPlayerProfile;
     }
 
-    private void addWin(PlayerProfile winnerProfile) {
+    private void addWin(PlayerProfile winnerProfile, boolean scoreFirstPlayerStarted) {
         if (winnerProfile == scoreFirstPlayerProfile) {
             scoreFirstPlayerWins++;
         } else if (winnerProfile == scoreSecondPlayerProfile) {
             scoreSecondPlayerWins++;
         }
+
+        addWinRateResult(true, scoreFirstPlayerStarted, winnerProfile == scoreFirstPlayerProfile);
+        addWinRateResult(false, !scoreFirstPlayerStarted, winnerProfile == scoreSecondPlayerProfile);
         completedMatches++;
+    }
+
+    private void addWinRateResult(boolean isScoreFirstPlayer, boolean playedFirstRole, boolean won) {
+        if (isScoreFirstPlayer) {
+            if (playedFirstRole) {
+                scoreFirstPlayerFirstRoleGames++;
+                scoreFirstPlayerFirstRoleWins += won ? 1 : 0;
+            } else {
+                scoreFirstPlayerSecondRoleGames++;
+                scoreFirstPlayerSecondRoleWins += won ? 1 : 0;
+            }
+            return;
+        }
+
+        if (playedFirstRole) {
+            scoreSecondPlayerFirstRoleGames++;
+            scoreSecondPlayerFirstRoleWins += won ? 1 : 0;
+        } else {
+            scoreSecondPlayerSecondRoleGames++;
+            scoreSecondPlayerSecondRoleWins += won ? 1 : 0;
+        }
     }
 
     private void removeScoredResult(int gameToken) {
@@ -514,12 +573,51 @@ public class GameUI extends Application {
         } else if (scoredWinnerProfile == scoreSecondPlayerProfile && scoreSecondPlayerWins > 0) {
             scoreSecondPlayerWins--;
         }
+
+        removeWinRateResult(
+                true,
+                scoredGameFirstPlayerStarted,
+                scoredWinnerProfile == scoreFirstPlayerProfile);
+        removeWinRateResult(
+                false,
+                !scoredGameFirstPlayerStarted,
+                scoredWinnerProfile == scoreSecondPlayerProfile);
         if (completedMatches > 0) {
             completedMatches--;
         }
 
         scoredGameToken = -1;
         scoredWinnerProfile = null;
+        scoredGameFirstPlayerStarted = false;
+    }
+
+    private void removeWinRateResult(boolean isScoreFirstPlayer, boolean playedFirstRole, boolean won) {
+        if (isScoreFirstPlayer) {
+            if (playedFirstRole) {
+                scoreFirstPlayerFirstRoleGames = Math.max(0, scoreFirstPlayerFirstRoleGames - 1);
+                if (won) {
+                    scoreFirstPlayerFirstRoleWins = Math.max(0, scoreFirstPlayerFirstRoleWins - 1);
+                }
+            } else {
+                scoreFirstPlayerSecondRoleGames = Math.max(0, scoreFirstPlayerSecondRoleGames - 1);
+                if (won) {
+                    scoreFirstPlayerSecondRoleWins = Math.max(0, scoreFirstPlayerSecondRoleWins - 1);
+                }
+            }
+            return;
+        }
+
+        if (playedFirstRole) {
+            scoreSecondPlayerFirstRoleGames = Math.max(0, scoreSecondPlayerFirstRoleGames - 1);
+            if (won) {
+                scoreSecondPlayerFirstRoleWins = Math.max(0, scoreSecondPlayerFirstRoleWins - 1);
+            }
+        } else {
+            scoreSecondPlayerSecondRoleGames = Math.max(0, scoreSecondPlayerSecondRoleGames - 1);
+            if (won) {
+                scoreSecondPlayerSecondRoleWins = Math.max(0, scoreSecondPlayerSecondRoleWins - 1);
+            }
+        }
     }
 
     private boolean isActiveGame(int gameToken) {
