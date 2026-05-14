@@ -6,6 +6,7 @@ public enum PlayerType {
     MTCS_EASY("MTCS Easy"),
     MTCS_MEDIUM("MTCS Medium"),
     MTCS_HARD("MTCS Hard"),
+    MTCS_EXTREME("MTCS Extreme"),
     GYM_PYTHON("Gym Python");
 
     private final String label;

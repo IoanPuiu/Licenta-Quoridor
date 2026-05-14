@@ -1,13 +1,6 @@
 package PerformanceModel;
 
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 public class GameState {
     public static final int BOARD_LENGTH = 9;
@@ -80,6 +73,12 @@ public class GameState {
         return possibleMoveCodes;
     }
 
+    public List<Integer> getListPossiblePawnMoveCodes() {
+        List<Integer> possibleMoveCodes = new LinkedList<>();
+        addPawnMoveCodes(possibleMoveCodes, currPlayerPos, opponentPos);
+        return possibleMoveCodes;
+    }
+
     public Set<Integer> getOpponentPossiblePawnMoveCodes() {
         Set<Integer> possibleMoveCodes = new TreeSet<>();
         addPawnMoveCodes(possibleMoveCodes, opponentPos, currPlayerPos);
@@ -87,6 +86,16 @@ public class GameState {
     }
 
     private void addPawnMoveCodes(Set<Integer> possibleMoveCodes, int movingPlayerPos, int blockingPlayerPos) {
+        for (int neighbourPosition : graph.get(movingPlayerPos)) {
+            if (neighbourPosition == blockingPlayerPos) {
+                addJumpOrSideMoveCodes(possibleMoveCodes, movingPlayerPos, blockingPlayerPos);
+            } else {
+                possibleMoveCodes.add(encodePawnMoveCode(neighbourPosition));
+            }
+        }
+    }
+
+    private void addPawnMoveCodes(List<Integer> possibleMoveCodes, int movingPlayerPos, int blockingPlayerPos) {
         for (int neighbourPosition : graph.get(movingPlayerPos)) {
             if (neighbourPosition == blockingPlayerPos) {
                 addJumpOrSideMoveCodes(possibleMoveCodes, movingPlayerPos, blockingPlayerPos);
@@ -378,7 +387,40 @@ public class GameState {
         addSideMoveCodeIfPossible(possibleMoveCodes, blockingPlayerPos, blockingRow - colDirection, blockingCol - rowDirection);
     }
 
+    private void addJumpOrSideMoveCodes(List<Integer> possibleMoveCodes, int movingPlayerPos, int blockingPlayerPos) {
+        int movingRow = rowOf(movingPlayerPos);
+        int movingCol = colOf(movingPlayerPos);
+        int blockingRow = rowOf(blockingPlayerPos);
+        int blockingCol = colOf(blockingPlayerPos);
+        int rowDirection = blockingRow - movingRow;
+        int colDirection = blockingCol - movingCol;
+        int jumpRow = blockingRow + rowDirection;
+        int jumpCol = blockingCol + colDirection;
+
+        if (isInsideBoard(jumpRow, jumpCol)) {
+            int jumpPosition = encodeCellPosition(jumpRow, jumpCol);
+            if (graph.get(blockingPlayerPos).contains(jumpPosition)) {
+                possibleMoveCodes.add(encodePawnMoveCode(jumpPosition));
+                return;
+            }
+        }
+
+        addSideMoveCodeIfPossible(possibleMoveCodes, blockingPlayerPos, blockingRow + colDirection, blockingCol + rowDirection);
+        addSideMoveCodeIfPossible(possibleMoveCodes, blockingPlayerPos, blockingRow - colDirection, blockingCol - rowDirection);
+    }
+
     private void addSideMoveCodeIfPossible(Set<Integer> possibleMoveCodes, int fromPosition, int row, int col) {
+        if (!isInsideBoard(row, col)) {
+            return;
+        }
+
+        int sidePosition = encodeCellPosition(row, col);
+        if (graph.get(fromPosition).contains(sidePosition)) {
+            possibleMoveCodes.add(encodePawnMoveCode(sidePosition));
+        }
+    }
+
+    private void addSideMoveCodeIfPossible(List<Integer> possibleMoveCodes, int fromPosition, int row, int col) {
         if (!isInsideBoard(row, col)) {
             return;
         }
@@ -486,4 +528,7 @@ public class GameState {
         return wallCode % 2 == 0;
     }
 
+    public Set<Integer> getPlacedWalls() {
+        return placedWalls;
+    }
 }

@@ -22,6 +22,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import SlowModel.PlayerProfile;
+import SlowModel.PlayerProfile.MtcsVariant;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,9 +33,10 @@ public class StartWindow {
     private static final int SCENE_HEIGHT = 760;
     private static final int MAX_AUTO_REMATCHES = 100;
     private static final int AUTO_REMATCH_INCREMENT = 10;
-    private static final int MTCS_EASY_DEPTH = 10_000;
-    private static final int MTCS_MEDIUM_DEPTH = 30_000;
-    private static final int MTCS_HARD_DEPTH = 60_000;
+    private static final int MTCS_EASY_DEPTH = 8_000;
+    private static final int MTCS_MEDIUM_DEPTH = 16_000;
+    private static final int MTCS_HARD_DEPTH = 32_000;
+    private static final int MTCS_EXTREME_DEPTH = 64_000;
 
     private final Stage stage;
     private final StartGameHandler startGameHandler;
@@ -59,6 +61,8 @@ public class StartWindow {
     private ComboBox<Integer> mtcsDepth;
     private ToggleGroup minimaxMoveOrderingGroup;
     private HBox minimaxMoveOrderingSegments;
+    private ToggleGroup mtcsVariantGroup;
+    private HBox mtcsVariantSegments;
     private Spinner<Integer> autoRematches;
     private Button humanPickButton;
     private Button minimaxPickButton;
@@ -81,9 +85,15 @@ public class StartWindow {
     private Scene createScene() {
         humanName = createPlayerNameField("Human name");
         minimaxDepth = createDepthComboBox(2, 3);
-        mtcsDepth = createDepthComboBox(MTCS_EASY_DEPTH, MTCS_MEDIUM_DEPTH, MTCS_HARD_DEPTH);
+        mtcsDepth = createDepthComboBox(
+                MTCS_EASY_DEPTH,
+                MTCS_MEDIUM_DEPTH,
+                MTCS_HARD_DEPTH,
+                MTCS_EXTREME_DEPTH);
         minimaxMoveOrderingGroup = new ToggleGroup();
         minimaxMoveOrderingSegments = createMoveOrderingSegments();
+        mtcsVariantGroup = new ToggleGroup();
+        mtcsVariantSegments = createMtcsVariantSegments();
         autoRematches = createAutoRematchesSpinner();
 
         humanPickButton = createPickButton("Pick");
@@ -103,7 +113,9 @@ public class StartWindow {
         minimaxPickButton.setOnAction(event -> pickPlayer(PlayerProfile.minimax(
                 minimaxDepth.getValue(),
                 selectedMoveOrdering())));
-        mtcsPickButton.setOnAction(event -> pickPlayer(PlayerProfile.mtcs(mtcsDepth.getValue())));
+        mtcsPickButton.setOnAction(event -> pickPlayer(PlayerProfile.mtcs(
+                mtcsDepth.getValue(),
+                selectedMtcsVariant())));
         gymPickButton.setOnAction(event -> pickPlayer(PlayerProfile.gymPython()));
         startButton.setOnAction(event -> startSelectedMatch());
 
@@ -174,6 +186,8 @@ public class StartWindow {
                 "MTCS",
                 createFieldLabel("Depth"),
                 mtcsDepth,
+                createFieldLabel("Variant"),
+                mtcsVariantSegments,
                 mtcsPickButton);
     }
 
@@ -311,6 +325,49 @@ public class StartWindow {
             return MoveOrdering.NONE;
         }
         return ordering;
+    }
+
+    private HBox createMtcsVariantSegments() {
+        HBox segments = new HBox(6);
+        segments.setMaxWidth(Double.MAX_VALUE);
+
+        ToggleButton defaultButton = null;
+        for (MtcsVariant variant : MtcsVariant.values()) {
+            ToggleButton button = new ToggleButton(variant.label());
+            button.setUserData(variant);
+            button.setToggleGroup(mtcsVariantGroup);
+            button.setMaxWidth(Double.MAX_VALUE);
+            button.setAccessibleText(variant.label());
+            button.selectedProperty().addListener((obs, oldValue, newValue) ->
+                    GuiTheme.styleSegmentButton(button));
+            HBox.setHgrow(button, Priority.ALWAYS);
+            GuiTheme.styleSegmentButton(button);
+            segmentButtons.add(button);
+            segments.getChildren().add(button);
+
+            if (variant == MtcsVariant.V0) {
+                defaultButton = button;
+            }
+        }
+
+        ToggleButton selectedDefaultButton = defaultButton == null
+                ? (ToggleButton) segments.getChildren().get(0)
+                : defaultButton;
+        mtcsVariantGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            if (newToggle == null && oldToggle != null) {
+                oldToggle.setSelected(true);
+            }
+        });
+        selectedDefaultButton.setSelected(true);
+        return segments;
+    }
+
+    private MtcsVariant selectedMtcsVariant() {
+        Toggle selectedToggle = mtcsVariantGroup.getSelectedToggle();
+        if (selectedToggle == null || !(selectedToggle.getUserData() instanceof MtcsVariant variant)) {
+            return MtcsVariant.V0;
+        }
+        return variant;
     }
 
     private Spinner<Integer> createAutoRematchesSpinner() {

@@ -1,6 +1,7 @@
 package SlowModel;
 
 import AI.MiniMax.MoveOrdering;
+import SlowModel.PlayerProfile.MtcsVariant;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,5 +41,22 @@ public class PlayerProfileTest {
         assertEquals(
                 "MiniMax D3 - Fast Move Ordering",
                 PlayerProfile.minimax(3, MoveOrdering.FAST).selectionSummary("Second Player"));
+    }
+
+    @Test
+    public void mtcsDisplayNameUsesConfiguredStateBudget() {
+        assertEquals("MCTS8K", PlayerProfile.mtcs(8_000).displayName("Second Player"));
+        assertEquals("MCTS16K", PlayerProfile.mtcs(16_000).displayName("Second Player"));
+        assertEquals("MCTS32K", PlayerProfile.mtcs(32_000).displayName("Second Player"));
+        assertEquals("MCTS64K", PlayerProfile.mtcs(64_000).displayName("Second Player"));
+    }
+
+    @Test
+    public void mtcsPerformanceProfileKeepsSelectedVariant() {
+        PlayerProfile profile = PlayerProfile.mtcs(16_000, MtcsVariant.PERFORMANCE);
+
+        assertEquals(MtcsVariant.PERFORMANCE, profile.mtcsVariant());
+        assertEquals("MCTS16K-P", profile.displayName("Second Player"));
+        assertEquals("MCTS16K - Performance", profile.selectionSummary("Second Player"));
     }
 }

@@ -3,7 +3,8 @@ package PerformanceModel;
 import AI.Algorithm;
 import AI.GymPython;
 import AI.MiniMax;
-import AI.Mtcs;
+import AI.MTCS.MtcsPerformance;
+import AI.MTCS.MtcsV0;
 import GUI.GameUI;
 import SlowModel.PlayerProfile;
 import SlowModel.PlayerType;
@@ -174,7 +175,9 @@ public class PerformanceGameController {
             case MINIMAX -> new MiniMax(
                     playerProfile.minimaxDepth(),
                     playerProfile.minimaxMoveOrdering());
-            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD -> new Mtcs(playerProfile.mtcsDepth());
+            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD, MTCS_EXTREME -> playerProfile.mtcsVariant() == PlayerProfile.MtcsVariant.PERFORMANCE
+                    ? new MtcsPerformance(playerProfile.mtcsDepth())
+                    : new MtcsV0(playerProfile.mtcsDepth());
             case GYM_PYTHON -> new GymPython();
             case HUMAN -> throw new IllegalArgumentException("Performance controller supports only AI players.");
         };

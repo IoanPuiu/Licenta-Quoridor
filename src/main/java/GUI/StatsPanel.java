@@ -384,12 +384,14 @@ final class StatsPanel {
                 .replaceAll("MiniMax D(\\d+) - No Move Ordering", "MM$1")
                 .replace("MiniMax", "MM")
                 .replace("Minimax", "MM")
-                .replace("MTCS Easy", "MCTS10K")
-                .replace("MTCS Medium", "MCTS30K")
-                .replace("MTCS Hard", "MCTS60K")
-                .replace("MTCS depth 10,000", "MCTS10K")
-                .replace("MTCS depth 30,000", "MCTS30K")
-                .replace("MTCS depth 60,000", "MCTS60K")
+                .replace("MTCS Easy", "MCTS8K")
+                .replace("MTCS Medium", "MCTS16K")
+                .replace("MTCS Hard", "MCTS32K")
+                .replace("MTCS Extreme", "MCTS64K")
+                .replace("MTCS depth 8,000", "MCTS8K")
+                .replace("MTCS depth 16,000", "MCTS16K")
+                .replace("MTCS depth 32,000", "MCTS32K")
+                .replace("MTCS depth 64,000", "MCTS64K")
                 .replace("Gym Python", "Gym");
         if (compactName.length() > 18) {
             compactName = compactName.substring(0, 17).trim() + ".";
