@@ -13,17 +13,16 @@ import SlowModel.PlayerProfile;
 import SlowModel.ThinkingStats;
 
 import java.util.List;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class GameUI extends Application {
 
     private static final long FAST_MOVE_THRESHOLD_NANOS = 1_000_000_000L;
     private static final long FAST_MOVE_PAUSE_MILLIS = 1_000L;
 
-    private final Semaphore clickSemaphore = new Semaphore(0);
+    private final BlockingQueue<int[]> clickQueue = new LinkedBlockingQueue<>();
 
-    private volatile int boardX;
-    private volatile int boardY;
     private GameWindow gameWindow;
     private Game currentGame;
     private PerformanceGameController currentPerformanceGame;
@@ -152,15 +151,11 @@ public class GameUI extends Application {
     }
 
     private void resetInputState() {
-        boardX = 0;
-        boardY = 0;
-        clickSemaphore.drainPermits();
+        clickQueue.clear();
     }
 
     private void storeClickCoordinates(int x, int y) {
-        boardX = x;
-        boardY = y;
-        clickSemaphore.release();
+        clickQueue.offer(new int[]{x, y});
     }
 
     private void undoLastHumanMove() {
@@ -170,6 +165,7 @@ public class GameUI extends Application {
     }
 
     public void wakeWaitingInput() {
+        clickQueue.clear();
         storeClickCoordinates(0, 0);
     }
 
@@ -181,11 +177,11 @@ public class GameUI extends Application {
 
     public int[] getMouseClickCoordinates() {
         try {
-            clickSemaphore.acquire();
+            return clickQueue.take();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return new int[]{0, 0};
         }
-        return new int[]{boardX, boardY};
     }
 
     public void draw(Move move) {

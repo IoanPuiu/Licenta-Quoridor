@@ -16,6 +16,8 @@ import java.util.List;
 public class Game {
     private final Object gameLock = new Object();
     private Board board;
+    private final Player bottomPlayer;
+    private final Player topPlayer;
     private Player currentPlayer;
     private Player opponent;
     private final GameUI gui;
@@ -55,12 +57,12 @@ public class Game {
         this.uiToken = uiToken;
         this.isBottomPlayerStarting = isBottomPlayerStarting;
         board = new Board(9);
-        Player bottomPlayer = new Player(
+        bottomPlayer = new Player(
                 bottomPlayerProfile.playerType(),
                 board.getBoardLength() - 1,
                 board.getBoardLength() / 2,
                 0);
-        Player topPlayer = new Player(
+        topPlayer = new Player(
                 topPlayerProfile.playerType(),
                 0,
                 board.getBoardLength() / 2,
@@ -401,13 +403,11 @@ public class Game {
             shouldRestartGameLoop = gameOver;
             gameOver = false;
             winner = null;
-            Player undoPlayer = moveHistory.get(undoIndex).getPlayer();
             List<Move> removedMoves = new ArrayList<>(moveHistory.subList(undoIndex, moveHistory.size()));
             moveHistory.subList(undoIndex, moveHistory.size()).clear();
             thinkingTimes.removeIf(thinkingTime -> removedMoves.contains(thinkingTime.move()));
             rebuildGameStateFromHistory();
-            currentPlayer = undoPlayer;
-            opponent = otherPlayer(undoPlayer);
+            restoreTurnFromHistory();
             stateVersion++;
 
             movesAfterUndo = new ArrayList<>(moveHistory);
@@ -509,8 +509,6 @@ public class Game {
 
     private void rebuildGameStateFromHistory() {
         List<Move> movesToReplay = new ArrayList<>(moveHistory);
-        Player bottomPlayer = bottomPlayer();
-        Player topPlayer = topPlayer();
         board = new Board(9);
         bottomPlayer.reset(board.getBoardLength() - 1, board.getBoardLength() / 2, 10);
         topPlayer.reset(0, board.getBoardLength() / 2, 10);
@@ -527,20 +525,31 @@ public class Game {
         }
     }
 
+    private void restoreTurnFromHistory() {
+        currentPlayer = moveHistory.isEmpty()
+                ? startingPlayer()
+                : otherPlayer(moveHistory.get(moveHistory.size() - 1).getPlayer());
+        opponent = otherPlayer(currentPlayer);
+    }
+
+    private Player startingPlayer() {
+        return isBottomPlayerStarting ? bottomPlayer : topPlayer;
+    }
+
     private boolean isCurrentTurn(Player player, int currentVersion) {
         return stateVersion == currentVersion && currentPlayer == player && !gameOver;
     }
 
     private Player otherPlayer(Player player) {
-        return player == currentPlayer ? opponent : currentPlayer;
+        return player == bottomPlayer ? topPlayer : bottomPlayer;
     }
 
     private Player bottomPlayer() {
-        return isBottomPlayer(currentPlayer) ? currentPlayer : opponent;
+        return bottomPlayer;
     }
 
     private Player topPlayer() {
-        return isBottomPlayer(currentPlayer) ? opponent : currentPlayer;
+        return topPlayer;
     }
 
     private boolean isBottomPlayer(Player player) {
