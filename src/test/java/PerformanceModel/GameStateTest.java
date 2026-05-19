@@ -124,6 +124,7 @@ class GameStateTest {
         int opponentDistanceBefore = gameState.getOpponentDistanceToFinish();
 
         int impact = gameState.wallImpact(wallCode);
+        WallImpact impactBreakdown = gameState.wallImpactBreakdown(wallCode);
         gameState.update(wallCode);
 
         int opponentDistanceAfter = gameState.getCurrentPlayerDistanceToFinish();
@@ -131,6 +132,9 @@ class GameStateTest {
         int movesAddedToOpponent = opponentDistanceAfter - opponentDistanceBefore;
         int movesAddedToCurrentPlayer = currentPlayerDistanceAfter - currentPlayerDistanceBefore;
         assertEquals(movesAddedToOpponent - movesAddedToCurrentPlayer, impact);
+        assertEquals(movesAddedToOpponent, impactBreakdown.movesAddedToOpponent());
+        assertEquals(movesAddedToCurrentPlayer, impactBreakdown.movesAddedToCurrentPlayer());
+        assertEquals(impact, impactBreakdown.net());
     }
 
     @Test

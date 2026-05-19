@@ -401,8 +401,9 @@ final class GuiTheme {
     }
 
     static void styleSegmentButton(ToggleButton button) {
-        button.setMinHeight(38);
-        button.setMaxHeight(38);
+        button.setMinHeight(40);
+        button.setPrefHeight(40);
+        button.setMaxHeight(48);
         button.setStyle(segmentButtonStyle(button.isSelected(), false));
         button.setOnMouseEntered(event -> button.setStyle(segmentButtonStyle(button.isSelected(), true)));
         button.setOnMouseExited(event -> button.setStyle(segmentButtonStyle(button.isSelected(), false)));

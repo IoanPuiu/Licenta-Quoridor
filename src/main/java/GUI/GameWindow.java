@@ -1,9 +1,11 @@
 package GUI;
 
 import PerformanceModel.GameState;
+import PerformanceModel.WallImpact;
 import SlowModel.Move;
 import SlowModel.MoveType;
 import SlowModel.Player;
+import SlowModel.PlayerProfile;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -28,10 +30,8 @@ public class GameWindow {
     private final Runnable rematchHandler;
     private final Runnable exitHandler;
     private final Consumer<Boolean> fastMoveDelayHandler;
-    private final String firstPlayerDisplayName;
-    private final String secondPlayerDisplayName;
-    private final String scoreFirstPlayerDisplayName;
-    private final String scoreSecondPlayerDisplayName;
+    private final PlayerProfile firstPlayerProfile;
+    private final PlayerProfile secondPlayerProfile;
     private final boolean scoreFirstPlayerUsesFirstColor;
     private final boolean scoreSecondPlayerUsesFirstColor;
     private int scoreFirstPlayerWins;
@@ -54,10 +54,8 @@ public class GameWindow {
             Runnable rematchHandler,
             Runnable exitHandler,
             Consumer<Boolean> fastMoveDelayHandler,
-            String firstPlayerDisplayName,
-            String secondPlayerDisplayName,
-            String scoreFirstPlayerDisplayName,
-            String scoreSecondPlayerDisplayName,
+            PlayerProfile firstPlayerProfile,
+            PlayerProfile secondPlayerProfile,
             boolean scoreFirstPlayerUsesFirstColor,
             boolean scoreSecondPlayerUsesFirstColor,
             int scoreFirstPlayerWins,
@@ -71,10 +69,8 @@ public class GameWindow {
         this.rematchHandler = rematchHandler;
         this.exitHandler = exitHandler;
         this.fastMoveDelayHandler = fastMoveDelayHandler;
-        this.firstPlayerDisplayName = firstPlayerDisplayName;
-        this.secondPlayerDisplayName = secondPlayerDisplayName;
-        this.scoreFirstPlayerDisplayName = scoreFirstPlayerDisplayName;
-        this.scoreSecondPlayerDisplayName = scoreSecondPlayerDisplayName;
+        this.firstPlayerProfile = firstPlayerProfile;
+        this.secondPlayerProfile = secondPlayerProfile;
         this.scoreFirstPlayerUsesFirstColor = scoreFirstPlayerUsesFirstColor;
         this.scoreSecondPlayerUsesFirstColor = scoreSecondPlayerUsesFirstColor;
         this.scoreFirstPlayerWins = scoreFirstPlayerWins;
@@ -178,8 +174,8 @@ public class GameWindow {
         updateTurnIndicators();
     }
 
-    public void drawPerformanceMove(int moveCode, boolean isPlayerAMove, int wallsLeft) {
-        boardPanel.drawPerformanceMove(moveCode, isPlayerAMove);
+    public void drawPerformanceMove(int moveCode, boolean isPlayerAMove, int wallsLeft, WallImpact wallImpact) {
+        boardPanel.drawPerformanceMove(moveCode, isPlayerAMove, wallImpact);
         if (!GameState.isPawnMoveCode(moveCode)) {
             playersPanel.updateWall(isPlayerAMove, wallsLeft);
         }
@@ -209,10 +205,8 @@ public class GameWindow {
                 exitHandler,
                 fastMoveDelayHandler,
                 this::applyTheme);
-        playersPanel = new PlayersPanel(firstPlayerDisplayName, secondPlayerDisplayName, isFirstPlayerTurn);
+        playersPanel = new PlayersPanel(firstPlayerProfile, secondPlayerProfile, isFirstPlayerTurn);
         statsPanel = new StatsPanel(
-                scoreFirstPlayerDisplayName,
-                scoreSecondPlayerDisplayName,
                 scoreFirstPlayerUsesFirstColor,
                 scoreSecondPlayerUsesFirstColor,
                 scoreFirstPlayerWins,

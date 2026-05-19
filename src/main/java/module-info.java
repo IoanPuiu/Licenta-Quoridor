@@ -8,5 +8,5 @@ module GUI {
     exports GUI to javafx.graphics;
     exports SlowModel;
     exports AI;
-    exports AI.MTCS;
+    exports AI.MCTS;
 }

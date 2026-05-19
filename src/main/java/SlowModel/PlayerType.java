@@ -3,10 +3,10 @@ package SlowModel;
 public enum PlayerType {
     HUMAN("Human"),
     MINIMAX("MiniMax"),
-    MTCS_EASY("MTCS Easy"),
-    MTCS_MEDIUM("MTCS Medium"),
-    MTCS_HARD("MTCS Hard"),
-    MTCS_EXTREME("MTCS Extreme"),
+    MCTS_EASY("MCTS Easy"),
+    MCTS_MEDIUM("MCTS Medium"),
+    MCTS_HARD("MCTS Hard"),
+    MCTS_EXTREME("MCTS Extreme"),
     GYM_PYTHON("Gym Python");
 
     private final String label;

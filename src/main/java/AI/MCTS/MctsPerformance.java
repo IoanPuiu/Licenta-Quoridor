@@ -1,11 +1,11 @@
-package AI.MTCS;
+package AI.MCTS;
 
 import AI.Algorithm;
 import PerformanceModel.GameState;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-public class MtcsPerformance implements Algorithm {
+public class MctsPerformance implements Algorithm {
 
     private static final int NO_MOVE = -1;
     private static final int NO_WINNER = -1;
@@ -18,7 +18,7 @@ public class MtcsPerformance implements Algorithm {
      * Rollout scurt.
      * Nu mai simula 120+ mutări cu toate zidurile posibile.
      */
-    private static final int ROLLOUT_MOVE_LIMIT = 24;
+    private static final int DEFAULT_ROLLOUT_MOVE_LIMIT = 32;
 
     /*
      * Progressive widening:
@@ -30,18 +30,47 @@ public class MtcsPerformance implements Algorithm {
     /*
      * Trebuie să fie suficient pentru:
      * - toate mutările de pion
-     * - top N pereți relevanți generați de MtcsState
+     * - top N pereți relevanți generați de MctsState
      */
     private static final int MAX_CANDIDATE_MOVES = 64;
 
     private final int steps;
+    private final int rolloutMoveLimit;
+    private final MctsSelectionHeuristic selectionHeuristic;
+    private final MctsRolloutHeuristic rolloutHeuristic;
 
-    public MtcsPerformance(int steps) {
+    public MctsPerformance(int steps) {
+        this(steps, DEFAULT_ROLLOUT_MOVE_LIMIT);
+    }
+
+    public MctsPerformance(int steps, int rolloutMoveLimit) {
+        this(
+                steps,
+                rolloutMoveLimit,
+                MctsSelectionHeuristic.WALLS_NEAR_PAWNS,
+                MctsRolloutHeuristic.PAWN_MOVES);
+    }
+
+    public MctsPerformance(
+            int steps,
+            int rolloutMoveLimit,
+            MctsSelectionHeuristic selectionHeuristic,
+            MctsRolloutHeuristic rolloutHeuristic) {
         if (steps < 1) {
             throw new IllegalArgumentException("MCTS steps must be at least 1.");
         }
+        if (rolloutMoveLimit < 1) {
+            throw new IllegalArgumentException("MCTS rollout move limit must be at least 1.");
+        }
 
         this.steps = steps;
+        this.rolloutMoveLimit = rolloutMoveLimit;
+        this.selectionHeuristic = selectionHeuristic == null
+                ? MctsSelectionHeuristic.WALLS_NEAR_PAWNS
+                : selectionHeuristic;
+        this.rolloutHeuristic = rolloutHeuristic == null
+                ? MctsRolloutHeuristic.PAWN_MOVES
+                : rolloutHeuristic;
     }
 
     @Override
@@ -51,7 +80,7 @@ public class MtcsPerformance implements Algorithm {
         /*
          * Convertim starea normală într-o stare optimizată pentru MCTS.
          */
-        MtcsState rootState = new MtcsState(state);
+        MctsState rootState = new MctsState(state);
 
         int rootFinishLine = rootState.getCurrPlayerFinishLine();
 
@@ -63,7 +92,7 @@ public class MtcsPerformance implements Algorithm {
             return winningMove;
         }
 
-        Node root = new Node(rootState, null, NO_MOVE);
+        Node root = new Node(rootState, null, NO_MOVE, selectionHeuristic);
 
         if (!root.hasUntriedMoves()) {
             throw new IllegalStateException("No candidate moves available.");
@@ -76,7 +105,7 @@ public class MtcsPerformance implements Algorithm {
              * Copiem doar starea nodului selectat pentru rollout.
              * Rollout-ul modifică această copie, nu starea din arbore.
              */
-            MtcsState rolloutState = new MtcsState(selectedNode.state);
+            MctsState rolloutState = new MctsState(selectedNode.state);
 
             double result = rollout(rolloutState, rootFinishLine, random);
 
@@ -135,10 +164,10 @@ public class MtcsPerformance implements Algorithm {
     private Node expand(Node node, ThreadLocalRandom random) {
         int move = node.takeRandomUntriedMove(random);
 
-        MtcsState childState = new MtcsState(node.state);
+        MctsState childState = new MctsState(node.state);
         childState.applyMove(move);
 
-        Node child = new Node(childState, node, move);
+        Node child = new Node(childState, node, move, selectionHeuristic);
         node.addChild(child);
 
         return child;
@@ -207,11 +236,11 @@ public class MtcsPerformance implements Algorithm {
     // ============================================================
 
     private double rollout(
-            MtcsState state,
+            MctsState state,
             int rootFinishLine,
             ThreadLocalRandom random
     ) {
-        for (int depth = 0; depth < ROLLOUT_MOVE_LIMIT; depth++) {
+        for (int depth = 0; depth < rolloutMoveLimit; depth++) {
 
             int winnerFinishLine = state.winnerFinishLine();
 
@@ -227,7 +256,7 @@ public class MtcsPerformance implements Algorithm {
              * - eventual 1-3 pereți foarte relevanți
              * - fără getAllPossibleMoveCodes()
              */
-            int move = state.selectRolloutMove(random);
+            int move = state.selectRolloutMove(random, rolloutHeuristic);
 
             if (move == NO_MOVE) {
                 return state.evaluateForRoot(rootFinishLine);
@@ -299,7 +328,7 @@ public class MtcsPerformance implements Algorithm {
 
     private static final class Node {
 
-        private final MtcsState state;
+        private final MctsState state;
         private final Node parent;
         private final int move;
 
@@ -315,7 +344,11 @@ public class MtcsPerformance implements Algorithm {
         private int visits;
         private double score;
 
-        private Node(MtcsState state, Node parent, int move) {
+        private Node(
+                MctsState state,
+                Node parent,
+                int move,
+                MctsSelectionHeuristic selectionHeuristic) {
             this.state = state;
             this.parent = parent;
             this.move = move;
@@ -337,7 +370,7 @@ public class MtcsPerformance implements Algorithm {
                  * - toate mutările de pion
                  * - top 10-30 pereți relevanți
                  */
-                this.untriedCount = state.generateCandidateMoves(this.untriedMoves);
+                this.untriedCount = state.generateCandidateMoves(this.untriedMoves, selectionHeuristic);
             }
         }
 

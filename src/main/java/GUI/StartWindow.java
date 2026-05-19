@@ -1,42 +1,45 @@
 package GUI;
 
+import AI.MCTS.MctsRolloutHeuristic;
+import AI.MCTS.MctsSelectionHeuristic;
 import AI.MiniMax.MoveOrdering;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
-import javafx.scene.layout.ColumnConstraints;
-import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
 import SlowModel.PlayerProfile;
-import SlowModel.PlayerProfile.MtcsVariant;
+import SlowModel.PlayerProfile.MctsVariant;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class StartWindow {
 
-    private static final int SCENE_WIDTH = 980;
+    private static final int SCENE_WIDTH = 1120;
     private static final int SCENE_HEIGHT = 760;
     private static final int MAX_AUTO_REMATCHES = 100;
     private static final int AUTO_REMATCH_INCREMENT = 10;
-    private static final int MTCS_EASY_DEPTH = 8_000;
-    private static final int MTCS_MEDIUM_DEPTH = 16_000;
-    private static final int MTCS_HARD_DEPTH = 32_000;
-    private static final int MTCS_EXTREME_DEPTH = 64_000;
+    private static final int MCTS_EASY_DEPTH = 8_000;
+    private static final int MCTS_MEDIUM_DEPTH = 16_000;
+    private static final int MCTS_HARD_DEPTH = 32_000;
+    private static final int MCTS_EXTREME_DEPTH = 64_000;
+    private static final int MCTS_SHORT_ROLLOUT_MOVE_LIMIT = 16;
+    private static final int MCTS_LONG_ROLLOUT_MOVE_LIMIT = 64;
 
     private final Stage stage;
     private final StartGameHandler startGameHandler;
@@ -45,11 +48,10 @@ public class StartWindow {
     private final List<Label> sectionLabels = new ArrayList<>();
     private final List<Label> mutedLabels = new ArrayList<>();
     private final List<Button> pickButtons = new ArrayList<>();
-    private final List<ComboBox<?>> comboBoxes = new ArrayList<>();
     private final List<ToggleButton> segmentButtons = new ArrayList<>();
 
     private VBox content;
-    private VBox setupPanel;
+    private HBox setupPanel;
     private VBox currentSelectionPanel;
     private Label title;
     private Label currentSelectionTitle;
@@ -57,16 +59,25 @@ public class StartWindow {
     private Label secondSelectionLabel;
     private Label autoRematchesLabel;
     private TextField humanName;
-    private ComboBox<Integer> minimaxDepth;
-    private ComboBox<Integer> mtcsDepth;
+    private ToggleGroup minimaxDepthGroup;
+    private HBox minimaxDepthSegments;
     private ToggleGroup minimaxMoveOrderingGroup;
     private HBox minimaxMoveOrderingSegments;
-    private ToggleGroup mtcsVariantGroup;
-    private HBox mtcsVariantSegments;
+    private ToggleGroup mctsDepthGroup;
+    private HBox mctsDepthSegments;
+    private ToggleGroup mctsVariantGroup;
+    private HBox mctsVariantSegments;
+    private ToggleGroup mctsSelectionHeuristicGroup;
+    private HBox mctsSelectionHeuristicSegments;
+    private ToggleGroup mctsRolloutHeuristicGroup;
+    private HBox mctsRolloutHeuristicSegments;
+    private ToggleGroup mctsRolloutMoveLimitGroup;
+    private HBox mctsRolloutMoveLimitSegments;
+    private VBox mctsPerformanceOptions;
     private Spinner<Integer> autoRematches;
     private Button humanPickButton;
     private Button minimaxPickButton;
-    private Button mtcsPickButton;
+    private Button mctsPickButton;
     private Button gymPickButton;
     private Button startButton;
     private MenuButton themeButton;
@@ -84,21 +95,64 @@ public class StartWindow {
 
     private Scene createScene() {
         humanName = createPlayerNameField("Human name");
-        minimaxDepth = createDepthComboBox(2, 3);
-        mtcsDepth = createDepthComboBox(
-                MTCS_EASY_DEPTH,
-                MTCS_MEDIUM_DEPTH,
-                MTCS_HARD_DEPTH,
-                MTCS_EXTREME_DEPTH);
+        minimaxDepthGroup = new ToggleGroup();
+        minimaxDepthSegments = createOptionSegments(
+                minimaxDepthGroup,
+                Integer.valueOf(2),
+                new Option<>(2, "D2", "MiniMax search depth 2."),
+                new Option<>(3, "D3", "MiniMax search depth 3."));
         minimaxMoveOrderingGroup = new ToggleGroup();
         minimaxMoveOrderingSegments = createMoveOrderingSegments();
-        mtcsVariantGroup = new ToggleGroup();
-        mtcsVariantSegments = createMtcsVariantSegments();
+        mctsDepthGroup = new ToggleGroup();
+        mctsDepthSegments = createOptionSegments(
+                mctsDepthGroup,
+                Integer.valueOf(MCTS_MEDIUM_DEPTH),
+                new Option<>(MCTS_EASY_DEPTH, "8K", "8,000 MCTS iterations."),
+                new Option<>(MCTS_MEDIUM_DEPTH, "16K", "16,000 MCTS iterations."),
+                new Option<>(MCTS_HARD_DEPTH, "32K", "32,000 MCTS iterations."),
+                new Option<>(MCTS_EXTREME_DEPTH, "64K", "64,000 MCTS iterations."));
+        mctsVariantGroup = new ToggleGroup();
+        mctsVariantSegments = createMctsVariantSegments();
+        mctsSelectionHeuristicGroup = new ToggleGroup();
+        mctsSelectionHeuristicSegments = createOptionSegments(
+                mctsSelectionHeuristicGroup,
+                PlayerProfile.DEFAULT_MCTS_SELECTION_HEURISTIC,
+                new Option<>(
+                        MctsSelectionHeuristic.WALLS_NEAR_PAWNS,
+                        "Pawns",
+                        MctsSelectionHeuristic.WALLS_NEAR_PAWNS.description()),
+                new Option<>(
+                        MctsSelectionHeuristic.WALLS_NEAR_PAWNS_EXISTING_WALLS_AND_EDGES,
+                        "Pawns + walls + edges",
+                        MctsSelectionHeuristic.WALLS_NEAR_PAWNS_EXISTING_WALLS_AND_EDGES.description()));
+        mctsRolloutHeuristicGroup = new ToggleGroup();
+        mctsRolloutHeuristicSegments = createOptionSegments(
+                mctsRolloutHeuristicGroup,
+                PlayerProfile.DEFAULT_MCTS_ROLLOUT_HEURISTIC,
+                new Option<>(
+                        MctsRolloutHeuristic.PAWN_MOVES,
+                        "Pawns",
+                        MctsRolloutHeuristic.PAWN_MOVES.description()),
+                new Option<>(
+                        MctsRolloutHeuristic.PAWN_MOVES_RANDOM_WALLS,
+                        "Random walls",
+                        MctsRolloutHeuristic.PAWN_MOVES_RANDOM_WALLS.description()),
+                new Option<>(
+                        MctsRolloutHeuristic.PAWN_MOVES_RELEVANT_WALLS,
+                        "Relevant walls",
+                        MctsRolloutHeuristic.PAWN_MOVES_RELEVANT_WALLS.description()));
+        mctsRolloutMoveLimitGroup = new ToggleGroup();
+        mctsRolloutMoveLimitSegments = createOptionSegments(
+                mctsRolloutMoveLimitGroup,
+                Integer.valueOf(PlayerProfile.DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT),
+                new Option<>(MCTS_SHORT_ROLLOUT_MOVE_LIMIT, "16", "Stop rollout after 16 moves."),
+                new Option<>(PlayerProfile.DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT, "32", "Stop rollout after 32 moves."),
+                new Option<>(MCTS_LONG_ROLLOUT_MOVE_LIMIT, "64", "Stop rollout after 64 moves."));
         autoRematches = createAutoRematchesSpinner();
 
         humanPickButton = createPickButton("Pick");
         minimaxPickButton = createPickButton("Pick");
-        mtcsPickButton = createPickButton("Pick");
+        mctsPickButton = createPickButton("Pick");
         gymPickButton = createPickButton("Pick");
         startButton = new Button("Start Match");
         startButton.setDisable(true);
@@ -111,24 +165,27 @@ public class StartWindow {
 
         humanPickButton.setOnAction(event -> pickPlayer(PlayerProfile.human(humanName.getText())));
         minimaxPickButton.setOnAction(event -> pickPlayer(PlayerProfile.minimax(
-                minimaxDepth.getValue(),
+                selectedMinimaxDepth(),
                 selectedMoveOrdering())));
-        mtcsPickButton.setOnAction(event -> pickPlayer(PlayerProfile.mtcs(
-                mtcsDepth.getValue(),
-                selectedMtcsVariant())));
+        mctsPickButton.setOnAction(event -> pickPlayer(PlayerProfile.mcts(
+                selectedMctsDepth(),
+                selectedMctsVariant(),
+                selectedMctsSelectionHeuristic(),
+                selectedMctsRolloutHeuristic(),
+                selectedMctsRolloutMoveLimit())));
         gymPickButton.setOnAction(event -> pickPlayer(PlayerProfile.gymPython()));
         startButton.setOnAction(event -> startSelectedMatch());
 
         title = new Label("Quoridor");
         GuiTheme.styleWindowTitle(title, 46);
 
-        setupPanel = new VBox(14, createCategoryGrid());
+        setupPanel = createSetupPanel();
         setupPanel.setAlignment(Pos.TOP_CENTER);
         HBox.setHgrow(setupPanel, Priority.ALWAYS);
 
         currentSelectionPanel = createCurrentSelectionPanel();
-        currentSelectionPanel.setPrefWidth(280);
-        currentSelectionPanel.setMaxWidth(280);
+        currentSelectionPanel.setPrefWidth(220);
+        currentSelectionPanel.setMaxWidth(220);
 
         HBox body = new HBox(18, setupPanel, currentSelectionPanel);
         body.setAlignment(Pos.TOP_CENTER);
@@ -142,30 +199,24 @@ public class StartWindow {
         return new Scene(content, SCENE_WIDTH, SCENE_HEIGHT);
     }
 
-    private GridPane createCategoryGrid() {
-        GridPane grid = new GridPane();
-        grid.setHgap(14);
-        grid.setVgap(14);
-        grid.setMaxWidth(Double.MAX_VALUE);
+    private HBox createSetupPanel() {
+        VBox sideOptions = new VBox(14, createHumanCard(), createMinimaxCard(), createGymCard());
+        sideOptions.setPrefWidth(316);
+        sideOptions.setMaxWidth(326);
 
-        ColumnConstraints leftColumn = new ColumnConstraints();
-        leftColumn.setPercentWidth(50);
-        leftColumn.setHgrow(Priority.ALWAYS);
-        ColumnConstraints rightColumn = new ColumnConstraints();
-        rightColumn.setPercentWidth(50);
-        rightColumn.setHgrow(Priority.ALWAYS);
-        grid.getColumnConstraints().addAll(leftColumn, rightColumn);
+        VBox mctsCard = createMctsCard();
+        HBox.setHgrow(mctsCard, Priority.ALWAYS);
 
-        grid.add(createHumanCard(), 0, 0);
-        grid.add(createMinimaxCard(), 1, 0);
-        grid.add(createMtcsCard(), 0, 1);
-        grid.add(createGymCard(), 1, 1);
-        return grid;
+        HBox panel = new HBox(14, sideOptions, mctsCard);
+        panel.setAlignment(Pos.TOP_CENTER);
+        panel.setMaxWidth(Double.MAX_VALUE);
+        return panel;
     }
 
     private VBox createHumanCard() {
         return createCategoryCard(
                 "Human",
+                142,
                 createFieldLabel("Name"),
                 humanName,
                 humanPickButton);
@@ -174,31 +225,40 @@ public class StartWindow {
     private VBox createMinimaxCard() {
         return createCategoryCard(
                 "Minimax",
+                188,
                 createFieldLabel("Depth"),
-                minimaxDepth,
+                minimaxDepthSegments,
                 createFieldLabel("Move ordering"),
                 minimaxMoveOrderingSegments,
                 minimaxPickButton);
     }
 
-    private VBox createMtcsCard() {
+    private VBox createMctsCard() {
+        mctsPerformanceOptions = createMctsPerformanceOptions();
+        updateMctsPerformanceOptions();
+
         return createCategoryCard(
-                "MTCS",
+                "MCTS",
+                470,
                 createFieldLabel("Depth"),
-                mtcsDepth,
+                mctsDepthSegments,
                 createFieldLabel("Variant"),
-                mtcsVariantSegments,
-                mtcsPickButton);
+                mctsVariantSegments,
+                mctsPerformanceOptions,
+                createFieldLabel("Rollout Limit"),
+                mctsRolloutMoveLimitSegments,
+                mctsPickButton);
     }
 
     private VBox createGymCard() {
         return createCategoryCard(
                 "Gym",
+                112,
                 createFieldLabel("No options yet"),
                 gymPickButton);
     }
 
-    private VBox createCategoryCard(String heading, Node... nodes) {
+    private VBox createCategoryCard(String heading, double minHeight, Node... nodes) {
         Label titleLabel = new Label(heading);
         sectionLabels.add(titleLabel);
         GuiTheme.styleWindowTitle(titleLabel, 18);
@@ -208,7 +268,7 @@ public class StartWindow {
         card.getChildren().addAll(nodes);
         card.setAlignment(Pos.TOP_LEFT);
         card.setPadding(new Insets(18));
-        card.setMinHeight(220);
+        card.setMinHeight(minHeight);
         card.setMaxWidth(Double.MAX_VALUE);
         card.setStyle(GuiTheme.panelStyle());
         categoryCards.add(card);
@@ -267,13 +327,54 @@ public class StartWindow {
         return textField;
     }
 
-    private ComboBox<Integer> createDepthComboBox(Integer... values) {
-        ComboBox<Integer> comboBox = new ComboBox<>();
-        comboBox.getItems().addAll(values);
-        comboBox.getSelectionModel().selectFirst();
-        GuiTheme.styleComboBox(comboBox);
-        comboBoxes.add(comboBox);
-        return comboBox;
+    @SafeVarargs
+    private <T> HBox createOptionSegments(ToggleGroup group, T defaultValue, Option<T>... options) {
+        HBox segments = new HBox(8);
+        segments.setMaxWidth(Double.MAX_VALUE);
+
+        ToggleButton defaultButton = null;
+        for (Option<T> option : options) {
+            ToggleButton button = createOptionButton(option.label(), option.tooltip(), option.value(), group);
+            HBox.setHgrow(button, Priority.ALWAYS);
+            segments.getChildren().add(button);
+
+            if (option.value().equals(defaultValue)) {
+                defaultButton = button;
+            }
+        }
+
+        ToggleButton selectedDefaultButton = defaultButton == null
+                ? (ToggleButton) segments.getChildren().get(0)
+                : defaultButton;
+        group.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+            if (newToggle == null && oldToggle != null) {
+                oldToggle.setSelected(true);
+            }
+        });
+        selectedDefaultButton.setSelected(true);
+        return segments;
+    }
+
+    private ToggleButton createOptionButton(
+            String text,
+            String tooltipText,
+            Object value,
+            ToggleGroup group) {
+        ToggleButton button = new ToggleButton(text);
+        button.setUserData(value);
+        button.setToggleGroup(group);
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setWrapText(true);
+        button.setTextAlignment(TextAlignment.CENTER);
+        button.setAlignment(Pos.CENTER);
+        if (tooltipText != null && !tooltipText.isBlank()) {
+            button.setTooltip(new Tooltip(tooltipText));
+        }
+        button.selectedProperty().addListener((obs, oldValue, newValue) ->
+                GuiTheme.styleSegmentButton(button));
+        GuiTheme.styleSegmentButton(button);
+        segmentButtons.add(button);
+        return button;
     }
 
     private HBox createMoveOrderingSegments() {
@@ -327,47 +428,92 @@ public class StartWindow {
         return ordering;
     }
 
-    private HBox createMtcsVariantSegments() {
-        HBox segments = new HBox(6);
-        segments.setMaxWidth(Double.MAX_VALUE);
+    private int selectedMinimaxDepth() {
+        return selectedIntegerValue(minimaxDepthGroup, 2);
+    }
 
-        ToggleButton defaultButton = null;
-        for (MtcsVariant variant : MtcsVariant.values()) {
-            ToggleButton button = new ToggleButton(variant.label());
-            button.setUserData(variant);
-            button.setToggleGroup(mtcsVariantGroup);
-            button.setMaxWidth(Double.MAX_VALUE);
-            button.setAccessibleText(variant.label());
-            button.selectedProperty().addListener((obs, oldValue, newValue) ->
-                    GuiTheme.styleSegmentButton(button));
-            HBox.setHgrow(button, Priority.ALWAYS);
-            GuiTheme.styleSegmentButton(button);
-            segmentButtons.add(button);
-            segments.getChildren().add(button);
+    private HBox createMctsVariantSegments() {
+        HBox segments = createOptionSegments(
+                mctsVariantGroup,
+                MctsVariant.V0,
+                new Option<>(MctsVariant.V0, "V0", "Baseline MCTS with the original tree policy."),
+                new Option<>(MctsVariant.PERFORMANCE, "Performance", "Optimized MCTS with progressive widening."));
 
-            if (variant == MtcsVariant.V0) {
-                defaultButton = button;
-            }
-        }
-
-        ToggleButton selectedDefaultButton = defaultButton == null
-                ? (ToggleButton) segments.getChildren().get(0)
-                : defaultButton;
-        mtcsVariantGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
+        mctsVariantGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {
             if (newToggle == null && oldToggle != null) {
                 oldToggle.setSelected(true);
             }
+            updateMctsPerformanceOptions();
         });
-        selectedDefaultButton.setSelected(true);
         return segments;
     }
 
-    private MtcsVariant selectedMtcsVariant() {
-        Toggle selectedToggle = mtcsVariantGroup.getSelectedToggle();
-        if (selectedToggle == null || !(selectedToggle.getUserData() instanceof MtcsVariant variant)) {
-            return MtcsVariant.V0;
+    private VBox createMctsPerformanceOptions() {
+        VBox options = new VBox(
+                8,
+                createFieldLabel("Selection Heuristic"),
+                mctsSelectionHeuristicSegments,
+                createFieldLabel("Rollout Heuristic"),
+                mctsRolloutHeuristicSegments);
+        options.setPadding(new Insets(4, 0, 2, 0));
+        options.setMaxWidth(Double.MAX_VALUE);
+        return options;
+    }
+
+    private void updateMctsPerformanceOptions() {
+        if (mctsPerformanceOptions == null) {
+            return;
+        }
+
+        boolean isPerformance = selectedMctsVariant() == MctsVariant.PERFORMANCE;
+        mctsPerformanceOptions.setManaged(isPerformance);
+        mctsPerformanceOptions.setVisible(isPerformance);
+    }
+
+    private MctsVariant selectedMctsVariant() {
+        Toggle selectedToggle = mctsVariantGroup.getSelectedToggle();
+        if (selectedToggle == null || !(selectedToggle.getUserData() instanceof MctsVariant variant)) {
+            return MctsVariant.V0;
         }
         return variant;
+    }
+
+    private int selectedMctsDepth() {
+        return selectedIntegerValue(mctsDepthGroup, MCTS_MEDIUM_DEPTH);
+    }
+
+    private MctsSelectionHeuristic selectedMctsSelectionHeuristic() {
+        Toggle selectedToggle = mctsSelectionHeuristicGroup.getSelectedToggle();
+        if (selectedToggle == null
+                || !(selectedToggle.getUserData() instanceof MctsSelectionHeuristic heuristic)) {
+            return PlayerProfile.DEFAULT_MCTS_SELECTION_HEURISTIC;
+        }
+
+        return heuristic;
+    }
+
+    private MctsRolloutHeuristic selectedMctsRolloutHeuristic() {
+        Toggle selectedToggle = mctsRolloutHeuristicGroup.getSelectedToggle();
+        if (selectedToggle == null || !(selectedToggle.getUserData() instanceof MctsRolloutHeuristic heuristic)) {
+            return PlayerProfile.DEFAULT_MCTS_ROLLOUT_HEURISTIC;
+        }
+
+        return heuristic;
+    }
+
+    private int selectedMctsRolloutMoveLimit() {
+        return selectedIntegerValue(
+                mctsRolloutMoveLimitGroup,
+                PlayerProfile.DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT);
+    }
+
+    private int selectedIntegerValue(ToggleGroup group, int defaultValue) {
+        Toggle selectedToggle = group.getSelectedToggle();
+        if (selectedToggle == null || !(selectedToggle.getUserData() instanceof Integer value)) {
+            return defaultValue;
+        }
+
+        return value;
     }
 
     private Spinner<Integer> createAutoRematchesSpinner() {
@@ -378,6 +524,7 @@ public class StartWindow {
                 0,
                 AUTO_REMATCH_INCREMENT));
         spinner.setEditable(true);
+        spinner.setMaxWidth(Double.MAX_VALUE);
         GuiTheme.styleSpinner(spinner);
         return spinner;
     }
@@ -468,12 +615,15 @@ public class StartWindow {
         GuiTheme.styleMutedLabel(firstSelectionLabel);
         GuiTheme.styleMutedLabel(secondSelectionLabel);
         GuiTheme.styleTextField(humanName);
-        comboBoxes.forEach(GuiTheme::styleComboBox);
         segmentButtons.forEach(GuiTheme::styleSegmentButton);
         GuiTheme.styleSpinner(autoRematches);
         pickButtons.forEach(GuiTheme::styleCompactButton);
         GuiTheme.stylePrimaryButton(startButton);
         GuiTheme.styleThemeButton(themeButton);
+        updateMctsPerformanceOptions();
+    }
+
+    private record Option<T>(T value, String label, String tooltip) {
     }
 
     @FunctionalInterface

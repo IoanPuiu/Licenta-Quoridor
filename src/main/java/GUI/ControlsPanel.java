@@ -16,8 +16,8 @@ import java.util.function.Consumer;
 
 final class ControlsPanel {
     private static final int CONTENT_HEIGHT = PlayersPanel.HEIGHT - GuiTheme.PANEL_TITLE_HEIGHT;
-    private static final int CONTENT_PADDING = 5;
-    private static final int CONTROL_GAP = 5;
+    private static final int CONTENT_PADDING = 9;
+    private static final int CONTROL_GAP = 8;
     private static final int STACK_HEIGHT = CONTENT_HEIGHT - CONTENT_PADDING * 2;
     private static final int STACK_BUTTON_HEIGHT = (STACK_HEIGHT - CONTROL_GAP) / 2;
     private static final int SQUARE_BUTTON_SIZE = STACK_HEIGHT;

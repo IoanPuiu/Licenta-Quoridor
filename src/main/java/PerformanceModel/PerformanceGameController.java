@@ -3,8 +3,8 @@ package PerformanceModel;
 import AI.Algorithm;
 import AI.GymPython;
 import AI.MiniMax;
-import AI.MTCS.MtcsPerformance;
-import AI.MTCS.MtcsV0;
+import AI.MCTS.MctsPerformance;
+import AI.MCTS.MctsV0;
 import GUI.GameUI;
 import SlowModel.PlayerProfile;
 import SlowModel.PlayerType;
@@ -132,7 +132,9 @@ public class PerformanceGameController {
 
                     boolean playerAMoved = isCurrentPlayerA;
                     boolean includeInAverage = state.getCurrPlayerWalls() > 0;
-                    int wallImpact = GameState.isPawnMoveCode(move) ? 0 : state.wallImpact(move);
+                    WallImpact wallImpact = GameState.isPawnMoveCode(move)
+                            ? WallImpact.none()
+                            : state.wallImpactBreakdown(move);
                     int wallsAfterMove = wallsAfterMove(move);
                     boolean winningMove = isWinningMove(move);
 
@@ -175,9 +177,13 @@ public class PerformanceGameController {
             case MINIMAX -> new MiniMax(
                     playerProfile.minimaxDepth(),
                     playerProfile.minimaxMoveOrdering());
-            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD, MTCS_EXTREME -> playerProfile.mtcsVariant() == PlayerProfile.MtcsVariant.PERFORMANCE
-                    ? new MtcsPerformance(playerProfile.mtcsDepth())
-                    : new MtcsV0(playerProfile.mtcsDepth());
+            case MCTS_EASY, MCTS_MEDIUM, MCTS_HARD, MCTS_EXTREME -> playerProfile.mctsVariant() == PlayerProfile.MctsVariant.PERFORMANCE
+                    ? new MctsPerformance(
+                            playerProfile.mctsDepth(),
+                            playerProfile.mctsRolloutMoveLimit(),
+                            playerProfile.mctsSelectionHeuristic(),
+                            playerProfile.mctsRolloutHeuristic())
+                    : new MctsV0(playerProfile.mctsDepth(), playerProfile.mctsRolloutMoveLimit());
             case GYM_PYTHON -> new GymPython();
             case HUMAN -> throw new IllegalArgumentException("Performance controller supports only AI players.");
         };
@@ -219,13 +225,14 @@ public class PerformanceGameController {
                     uiToken,
                     result.move(),
                     result.playerAMoved(),
-                    result.wallsAfterMove());
+                    result.wallsAfterMove(),
+                    result.wallImpact());
             gui.recordPerformanceMoveTime(
                     uiToken,
                     result.playerAMoved(),
                     result.includeInAverage(),
                     result.thinkingTimeNanos(),
-                    result.wallImpact());
+                    result.wallImpact().net());
         });
     }
 
@@ -239,7 +246,7 @@ public class PerformanceGameController {
             int wallsAfterMove,
             long thinkingTimeNanos,
             boolean includeInAverage,
-            int wallImpact,
+            WallImpact wallImpact,
             boolean winningMove) {
     }
 

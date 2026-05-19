@@ -1,6 +1,7 @@
 package GUI;
 
 import PerformanceModel.PerformanceGameController;
+import PerformanceModel.WallImpact;
 import javafx.animation.PauseTransition;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -30,8 +31,6 @@ public class GameUI extends Application {
     private PlayerProfile secondPlayerProfile;
     private PlayerProfile scoreFirstPlayerProfile;
     private PlayerProfile scoreSecondPlayerProfile;
-    private String scoreFirstPlayerDisplayName;
-    private String scoreSecondPlayerDisplayName;
     private int scoreFirstPlayerWins;
     private int scoreSecondPlayerWins;
     private int scoreFirstPlayerFirstRoleGames;
@@ -109,10 +108,8 @@ public class GameUI extends Application {
                 this::rematchGame,
                 this::exitGame,
                 this::setFastMoveDelayEnabled,
-                firstPlayerProfile.displayName("First Player"),
-                secondPlayerProfile.displayName("Second Player"),
-                scoreFirstPlayerDisplayName,
-                scoreSecondPlayerDisplayName,
+                firstPlayerProfile,
+                secondPlayerProfile,
                 scoreFirstPlayerProfile == firstPlayerProfile,
                 scoreSecondPlayerProfile == firstPlayerProfile,
                 scoreFirstPlayerWins,
@@ -194,9 +191,14 @@ public class GameUI extends Application {
         }
     }
 
-    public void drawPerformanceMove(int gameToken, int moveCode, boolean isPlayerAMove, int wallsLeft) {
+    public void drawPerformanceMove(
+            int gameToken,
+            int moveCode,
+            boolean isPlayerAMove,
+            int wallsLeft,
+            WallImpact wallImpact) {
         if (isActiveGame(gameToken)) {
-            gameWindow.drawPerformanceMove(moveCode, isPlayerAMove, wallsLeft);
+            gameWindow.drawPerformanceMove(moveCode, isPlayerAMove, wallsLeft, wallImpact);
         }
     }
 
@@ -383,8 +385,6 @@ public class GameUI extends Application {
     private void initializeScore(PlayerProfile firstPlayerProfile, PlayerProfile secondPlayerProfile) {
         scoreFirstPlayerProfile = firstPlayerProfile;
         scoreSecondPlayerProfile = secondPlayerProfile;
-        scoreFirstPlayerDisplayName = firstPlayerProfile.displayName("First Player");
-        scoreSecondPlayerDisplayName = secondPlayerProfile.displayName("Second Player");
         scoreFirstPlayerWins = 0;
         scoreSecondPlayerWins = 0;
         resetWinRateStats();
@@ -406,8 +406,6 @@ public class GameUI extends Application {
     private void resetScore() {
         scoreFirstPlayerProfile = null;
         scoreSecondPlayerProfile = null;
-        scoreFirstPlayerDisplayName = null;
-        scoreSecondPlayerDisplayName = null;
         scoreFirstPlayerWins = 0;
         scoreSecondPlayerWins = 0;
         resetWinRateStats();

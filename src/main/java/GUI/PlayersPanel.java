@@ -1,18 +1,22 @@
 package GUI;
 
+import SlowModel.PlayerProfile;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
+import javafx.scene.control.OverrunStyle;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.text.TextAlignment;
 
 final class PlayersPanel {
     private static final int INITIAL_WALLS = 10;
-    static final int HEIGHT = 104;
+    static final int HEIGHT = 148;
     private static final int CONTENT_HEIGHT = HEIGHT - GuiTheme.PANEL_TITLE_HEIGHT;
     private static final int CONTENT_PADDING = GuiTheme.PANEL_CONTENT_PADDING;
     private static final int CARD_GAP = GuiTheme.PANEL_ELEMENT_GAP;
@@ -24,8 +28,10 @@ final class PlayersPanel {
     private final HBox cardsRow;
     private final VBox firstPlayerCard;
     private final VBox secondPlayerCard;
-    private final Label firstPlayerNameLabel;
-    private final Label secondPlayerNameLabel;
+    private final Label firstPlayerTitleLabel;
+    private final Label secondPlayerTitleLabel;
+    private final Label firstPlayerSettingsLabel;
+    private final Label secondPlayerSettingsLabel;
     private final Circle firstPlayerMarker;
     private final Circle secondPlayerMarker;
     private final Label firstPlayerWallsLabel;
@@ -34,24 +40,37 @@ final class PlayersPanel {
     private boolean isFirstPlayerWinner;
     private boolean isGameOver;
 
-    PlayersPanel(String firstPlayerDisplayName, String secondPlayerDisplayName, boolean isFirstPlayerStarting) {
+    PlayersPanel(
+            PlayerProfile firstPlayerProfile,
+            PlayerProfile secondPlayerProfile,
+            boolean isFirstPlayerStarting) {
         this.isFirstPlayerTurn = isFirstPlayerStarting;
         this.isGameOver = false;
         this.titleLabel = new Label("Players");
         this.firstPlayerMarker = new Circle(6, GuiTheme.playerOne());
         this.secondPlayerMarker = new Circle(6, GuiTheme.playerTwo());
-        this.firstPlayerNameLabel = createPlayerNameLabel(shortPlayerName(firstPlayerDisplayName, "First"));
-        this.secondPlayerNameLabel = createPlayerNameLabel(shortPlayerName(secondPlayerDisplayName, "Second"));
+        this.firstPlayerTitleLabel = createPlayerTitleLabel(
+                firstPlayerProfile.cardTitle("First Player"));
+        this.secondPlayerTitleLabel = createPlayerTitleLabel(
+                secondPlayerProfile.cardTitle("Second Player"));
+        this.firstPlayerSettingsLabel = createSettingsLabel(
+                firstPlayerProfile.cardSettingsSummary("First Player"),
+                firstPlayerProfile.cardSettingsDetails("First Player"));
+        this.secondPlayerSettingsLabel = createSettingsLabel(
+                secondPlayerProfile.cardSettingsSummary("Second Player"),
+                secondPlayerProfile.cardSettingsDetails("Second Player"));
         this.firstPlayerWallsLabel = createWallsLabel(GuiTheme.playerOne());
         this.secondPlayerWallsLabel = createWallsLabel(GuiTheme.playerTwo());
         this.firstPlayerCard = createPlayerCard(
                 firstPlayerMarker,
-                firstPlayerNameLabel,
+                firstPlayerTitleLabel,
+                firstPlayerSettingsLabel,
                 firstPlayerWallsLabel,
                 GuiTheme.playerOne());
         this.secondPlayerCard = createPlayerCard(
                 secondPlayerMarker,
-                secondPlayerNameLabel,
+                secondPlayerTitleLabel,
+                secondPlayerSettingsLabel,
                 secondPlayerWallsLabel,
                 GuiTheme.playerTwo());
 
@@ -105,8 +124,10 @@ final class PlayersPanel {
         cardsRow.setMaxHeight(CONTENT_HEIGHT);
         firstPlayerWallsLabel.setTextFill(GuiTheme.playerOne());
         secondPlayerWallsLabel.setTextFill(GuiTheme.playerTwo());
-        firstPlayerNameLabel.setTextFill(GuiTheme.text());
-        secondPlayerNameLabel.setTextFill(GuiTheme.text());
+        firstPlayerTitleLabel.setTextFill(GuiTheme.text());
+        secondPlayerTitleLabel.setTextFill(GuiTheme.text());
+        firstPlayerSettingsLabel.setTextFill(GuiTheme.mutedText());
+        secondPlayerSettingsLabel.setTextFill(GuiTheme.mutedText());
         firstPlayerMarker.setFill(GuiTheme.playerOne());
         secondPlayerMarker.setFill(GuiTheme.playerTwo());
         updateTurnIndicators();
@@ -119,23 +140,41 @@ final class PlayersPanel {
         return label;
     }
 
-    private Label createPlayerNameLabel(String playerName) {
-        Label nameLabel = new Label(playerName);
-        nameLabel.setTextFill(GuiTheme.text());
-        nameLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 12));
-        nameLabel.setWrapText(true);
-        nameLabel.setMaxWidth(108);
-        return nameLabel;
+    private Label createPlayerTitleLabel(String playerName) {
+        Label titleLabel = new Label(playerName);
+        titleLabel.setTextFill(GuiTheme.text());
+        titleLabel.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 12));
+        titleLabel.setWrapText(false);
+        titleLabel.setTextOverrun(OverrunStyle.ELLIPSIS);
+        titleLabel.setMaxWidth(112);
+        return titleLabel;
     }
 
-    private VBox createPlayerCard(Circle marker, Label nameLabel, Label wallsLabel, Color accentColor) {
+    private Label createSettingsLabel(String summary, String details) {
+        Label label = new Label(summary);
+        label.setTextFill(GuiTheme.mutedText());
+        label.setFont(Font.font("Arial", FontWeight.BOLD, 10.5));
+        label.setWrapText(true);
+        label.setTextAlignment(TextAlignment.LEFT);
+        label.setTextOverrun(OverrunStyle.ELLIPSIS);
+        label.setMaxWidth(CARD_WIDTH - 16);
+        label.setTooltip(new Tooltip(details));
+        return label;
+    }
+
+    private VBox createPlayerCard(
+            Circle marker,
+            Label titleLabel,
+            Label settingsLabel,
+            Label wallsLabel,
+            Color accentColor) {
         marker.setStroke(Color.WHITE);
         marker.setStrokeWidth(2);
 
-        HBox titleRow = new HBox(9, marker, nameLabel);
+        HBox titleRow = new HBox(9, marker, titleLabel);
         titleRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox card = new VBox(5, titleRow, wallsLabel);
+        VBox card = new VBox(4, titleRow, settingsLabel, wallsLabel);
         card.setPadding(new Insets(7, 8, 7, 8));
         card.setMinSize(CARD_WIDTH, CARD_HEIGHT);
         card.setPrefSize(CARD_WIDTH, CARD_HEIGHT);
@@ -161,26 +200,4 @@ final class PlayersPanel {
         return isGameOver ? !isFirstPlayerWinner : !isFirstPlayerTurn;
     }
 
-    private String shortPlayerName(String playerName, String prefix) {
-        String normalizedName = playerName == null || playerName.isBlank() ? prefix : playerName.trim();
-        String compactName = normalizedName
-                .replaceAll("MiniMax D(\\d+) - Fast Move Ordering", "MM$1F")
-                .replaceAll("MiniMax D(\\d+) - Precise Move Ordering", "MM$1P")
-                .replaceAll("MiniMax D(\\d+) - No Move Ordering", "MM$1")
-                .replace("MiniMax", "MM")
-                .replace("Minimax", "MM")
-                .replace("MTCS Easy", "MCTS8K")
-                .replace("MTCS Medium", "MCTS16K")
-                .replace("MTCS Hard", "MCTS32K")
-                .replace("MTCS Extreme", "MCTS64K")
-                .replace("MTCS depth 8,000", "MCTS8K")
-                .replace("MTCS depth 16,000", "MCTS16K")
-                .replace("MTCS depth 32,000", "MCTS32K")
-                .replace("MTCS depth 64,000", "MCTS64K")
-                .replace("Gym Python", "Gym");
-        if (compactName.length() > 18) {
-            compactName = compactName.substring(0, 17).trim() + ".";
-        }
-        return compactName;
-    }
 }

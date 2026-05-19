@@ -3,6 +3,7 @@ package GUI;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.Label;
 import javafx.scene.control.OverrunStyle;
 import javafx.scene.layout.ColumnConstraints;
@@ -11,6 +12,7 @@ import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
@@ -35,8 +37,6 @@ final class StatsPanel {
     private static final double ROW_HEIGHT =
             (GRID_HEIGHT - CELL_GAP * (ROW_COUNT - 1)) / ROW_COUNT;
 
-    private final String scoreFirstPlayerDisplayName;
-    private final String scoreSecondPlayerDisplayName;
     private final boolean scoreFirstPlayerUsesFirstColor;
     private final boolean scoreSecondPlayerUsesFirstColor;
     private final VBox view;
@@ -49,8 +49,8 @@ final class StatsPanel {
     private final Label longestMoveMetricLabel;
     private final Label averageGameThinkingMetricLabel;
     private final Label averageWallImpactMetricLabel;
-    private final Label firstPlayerScoreNameLabel;
-    private final Label secondPlayerScoreNameLabel;
+    private final Label firstPlayerPawnHeaderLabel;
+    private final Label secondPlayerPawnHeaderLabel;
     private final Label firstPlayerScoreValueLabel;
     private final Label secondPlayerScoreValueLabel;
     private final Label firstPlayerFirstRoleWinRateValueLabel;
@@ -67,15 +67,11 @@ final class StatsPanel {
     private final Label secondPlayerAverageWallImpactValueLabel;
 
     StatsPanel(
-            String scoreFirstPlayerDisplayName,
-            String scoreSecondPlayerDisplayName,
             boolean scoreFirstPlayerUsesFirstColor,
             boolean scoreSecondPlayerUsesFirstColor,
             int scoreFirstPlayerWins,
             int scoreSecondPlayerWins,
             boolean showScore) {
-        this.scoreFirstPlayerDisplayName = scoreFirstPlayerDisplayName;
-        this.scoreSecondPlayerDisplayName = scoreSecondPlayerDisplayName;
         this.scoreFirstPlayerUsesFirstColor = scoreFirstPlayerUsesFirstColor;
         this.scoreSecondPlayerUsesFirstColor = scoreSecondPlayerUsesFirstColor;
         this.titleLabel = new Label("Stats");
@@ -87,12 +83,8 @@ final class StatsPanel {
         this.longestMoveMetricLabel = createStatsMetricLabel("Longest move");
         this.averageGameThinkingMetricLabel = createStatsMetricLabel("Avg total/game");
         this.averageWallImpactMetricLabel = createStatsMetricLabel("Avg wall impact");
-        this.firstPlayerScoreNameLabel = createStatsHeaderLabel(
-                shortPlayerName(scoreFirstPlayerDisplayName, "Player"),
-                scoreFirstPlayerColor());
-        this.secondPlayerScoreNameLabel = createStatsHeaderLabel(
-                shortPlayerName(scoreSecondPlayerDisplayName, "Player"),
-                scoreSecondPlayerColor());
+        this.firstPlayerPawnHeaderLabel = createPawnHeaderLabel(scoreFirstPlayerColor());
+        this.secondPlayerPawnHeaderLabel = createPawnHeaderLabel(scoreSecondPlayerColor());
         this.firstPlayerScoreValueLabel = createScoreValueLabel(scoreFirstPlayerColor());
         this.secondPlayerScoreValueLabel = createScoreValueLabel(scoreSecondPlayerColor());
         this.firstPlayerFirstRoleWinRateValueLabel = createStatsValueLabel();
@@ -202,10 +194,8 @@ final class StatsPanel {
             label.setStyle(GuiTheme.statsValueStyle());
         });
 
-        firstPlayerScoreNameLabel.setTextFill(scoreFirstPlayerColor());
-        secondPlayerScoreNameLabel.setTextFill(scoreSecondPlayerColor());
-        firstPlayerScoreNameLabel.setStyle(GuiTheme.scoreTeamStyle(scoreFirstPlayerColor()));
-        secondPlayerScoreNameLabel.setStyle(GuiTheme.scoreTeamStyle(scoreSecondPlayerColor()));
+        updatePawnHeaderLabel(firstPlayerPawnHeaderLabel, scoreFirstPlayerColor());
+        updatePawnHeaderLabel(secondPlayerPawnHeaderLabel, scoreSecondPlayerColor());
         firstPlayerScoreValueLabel.setTextFill(scoreFirstPlayerColor());
         secondPlayerScoreValueLabel.setTextFill(scoreSecondPlayerColor());
         firstPlayerScoreValueLabel.setStyle(GuiTheme.statsValueStyle());
@@ -231,8 +221,8 @@ final class StatsPanel {
         }
 
         addStatsCell(grid, statsMetricHeaderLabel, 0, 0, METRIC_COLUMN_WIDTH);
-        addStatsCell(grid, firstPlayerScoreNameLabel, 1, 0, PLAYER_COLUMN_WIDTH);
-        addStatsCell(grid, secondPlayerScoreNameLabel, 2, 0, PLAYER_COLUMN_WIDTH);
+        addStatsCell(grid, firstPlayerPawnHeaderLabel, 1, 0, PLAYER_COLUMN_WIDTH);
+        addStatsCell(grid, secondPlayerPawnHeaderLabel, 2, 0, PLAYER_COLUMN_WIDTH);
         addStatsRow(grid, 1, scoreMetricLabel, firstPlayerScoreValueLabel, secondPlayerScoreValueLabel);
         addStatsRow(grid, 2, averageMoveMetricLabel, firstPlayerAverageMoveValueLabel, secondPlayerAverageMoveValueLabel);
         addStatsRow(grid, 3, longestMoveMetricLabel, firstPlayerLongestMoveValueLabel, secondPlayerLongestMoveValueLabel);
@@ -332,18 +322,33 @@ final class StatsPanel {
         return scoreSecondPlayerUsesFirstColor ? GuiTheme.playerOne() : GuiTheme.playerTwo();
     }
 
-    private Label createStatsHeaderLabel(String text, Color accentColor) {
-        Label label = new Label(text);
-        label.setTextFill(accentColor);
+    private Label createPawnHeaderLabel(Color accentColor) {
+        Label label = new Label("", createPawnMarker(accentColor));
         label.setFont(Font.font("Arial", FontWeight.EXTRA_BOLD, 13));
         label.setAlignment(Pos.CENTER);
-        label.setWrapText(true);
+        label.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        label.setWrapText(false);
         label.setMinWidth(PLAYER_COLUMN_WIDTH);
         label.setPrefWidth(PLAYER_COLUMN_WIDTH);
         label.setMaxWidth(PLAYER_COLUMN_WIDTH);
         label.setMinHeight(28);
         label.setStyle(GuiTheme.scoreTeamStyle(accentColor));
         return label;
+    }
+
+    private void updatePawnHeaderLabel(Label label, Color accentColor) {
+        label.setText("");
+        label.setGraphic(createPawnMarker(accentColor));
+        label.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+        label.setStyle(GuiTheme.scoreTeamStyle(accentColor));
+    }
+
+    private Circle createPawnMarker(Color accentColor) {
+        Circle marker = new Circle(7, accentColor);
+        marker.setStroke(Color.WHITE);
+        marker.setStrokeWidth(2);
+        marker.setEffect(GuiTheme.softShadow(accentColor));
+        return marker;
     }
 
     private Label createStatsMetricLabel(String text) {
@@ -374,29 +379,6 @@ final class StatsPanel {
         label.setMinHeight(26);
         label.setStyle(GuiTheme.statsValueStyle());
         return label;
-    }
-
-    private String shortPlayerName(String playerName, String prefix) {
-        String normalizedName = playerName == null || playerName.isBlank() ? prefix : playerName.trim();
-        String compactName = normalizedName
-                .replaceAll("MiniMax D(\\d+) - Fast Move Ordering", "MM$1F")
-                .replaceAll("MiniMax D(\\d+) - Precise Move Ordering", "MM$1P")
-                .replaceAll("MiniMax D(\\d+) - No Move Ordering", "MM$1")
-                .replace("MiniMax", "MM")
-                .replace("Minimax", "MM")
-                .replace("MTCS Easy", "MCTS8K")
-                .replace("MTCS Medium", "MCTS16K")
-                .replace("MTCS Hard", "MCTS32K")
-                .replace("MTCS Extreme", "MCTS64K")
-                .replace("MTCS depth 8,000", "MCTS8K")
-                .replace("MTCS depth 16,000", "MCTS16K")
-                .replace("MTCS depth 32,000", "MCTS32K")
-                .replace("MTCS depth 64,000", "MCTS64K")
-                .replace("Gym Python", "Gym");
-        if (compactName.length() > 18) {
-            compactName = compactName.substring(0, 17).trim() + ".";
-        }
-        return compactName;
     }
 
     private String formatThinkingTime(double thinkingTimeNanos) {

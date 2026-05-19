@@ -1,4 +1,4 @@
-package AI.MTCS;
+package AI.MCTS;
 
 import AI.Algorithm;
 import PerformanceModel.GameState;
@@ -9,20 +9,29 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
-public class MtcsV0 implements Algorithm {
+public class MctsV0 implements Algorithm {
     private static final double EXPLORATION_WEIGHT = Math.sqrt(2.0);
     private static final double WIN_REWARD = 1.0;
     private static final double LOSS_REWARD = 0.0;
     private static final double DRAW_REWARD = 0.5;
-    private static final int ROLLOUT_MOVE_LIMIT = 32;
+    private static final int DEFAULT_ROLLOUT_MOVE_LIMIT = 32;
 
     private final int steps;
+    private final int rolloutMoveLimit;
 
-    public MtcsV0(int steps) {
+    public MctsV0(int steps) {
+        this(steps, DEFAULT_ROLLOUT_MOVE_LIMIT);
+    }
+
+    public MctsV0(int steps, int rolloutMoveLimit) {
         if (steps < 1) {
-            throw new IllegalArgumentException("MTCS step count must be at least 1.");
+            throw new IllegalArgumentException("MCTS step count must be at least 1.");
+        }
+        if (rolloutMoveLimit < 1) {
+            throw new IllegalArgumentException("MCTS rollout move limit must be at least 1.");
         }
         this.steps = steps;
+        this.rolloutMoveLimit = rolloutMoveLimit;
     }
 
     @Override
@@ -99,7 +108,7 @@ public class MtcsV0 implements Algorithm {
     }
 
     private double rollout(GameState state, int rootFinishLine) {
-        for (int moveCount = 0; moveCount < ROLLOUT_MOVE_LIMIT; moveCount++) {
+        for (int moveCount = 0; moveCount < rolloutMoveLimit; moveCount++) {
             Integer winnerFinishLine = winnerFinishLine(state);
             if (winnerFinishLine != null) {
                 return winnerFinishLine == rootFinishLine ? WIN_REWARD : LOSS_REWARD;

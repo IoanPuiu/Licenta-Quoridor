@@ -1,6 +1,7 @@
 package GUI;
 
 import PerformanceModel.GameState;
+import PerformanceModel.WallImpact;
 import SlowModel.Move;
 import SlowModel.MoveType;
 import SlowModel.Player;
@@ -10,6 +11,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.VPos;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
 import javafx.scene.layout.CornerRadii;
@@ -23,6 +25,7 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +44,7 @@ final class GameBoardPanel {
     private final BiConsumer<Integer, Integer> boardClickHandler;
     private final List<Circle> possiblePawnMoves;
     private final List<Rectangle> boardCells;
-    private final List<Line> wallLines;
+    private final List<PlacedWallLine> wallLines;
     private Circle firstPlayerPawn;
     private Circle secondPlayerPawn;
 
@@ -89,11 +92,11 @@ final class GameBoardPanel {
         }
     }
 
-    void drawPerformanceMove(int moveCode, boolean isPlayerAMove) {
+    void drawPerformanceMove(int moveCode, boolean isPlayerAMove, WallImpact wallImpact) {
         if (GameState.isPawnMoveCode(moveCode)) {
             drawPerformancePawn(moveCode, isPlayerAMove);
         } else {
-            drawPerformanceWall(moveCode);
+            drawPerformanceWall(moveCode, isPlayerAMove, wallImpact);
         }
     }
 
@@ -157,8 +160,8 @@ final class GameBoardPanel {
             cell.setStroke(GuiTheme.boardGrid());
         }
 
-        for (Line wallLine : wallLines) {
-            wallLine.setStroke(GuiTheme.wall());
+        for (PlacedWallLine wallLine : wallLines) {
+            wallLine.line().setStroke(playerColor(wallLine.isFirstPlayer()));
         }
 
         Color possibleMoveColor = isFirstPlayerTurn ? GuiTheme.playerOne() : GuiTheme.playerTwo();
@@ -237,10 +240,10 @@ final class GameBoardPanel {
         int x2 = move.isHorizontal() ? x1 + 80 : x1;
         int y2 = move.isHorizontal() ? y1 : y1 + 80;
 
-        drawLine(x1, x2, y1, y2);
+        drawLine(x1, x2, y1, y2, isBottomPlayer(move.getPlayer()), move.getWallImpact());
     }
 
-    private void drawPerformanceWall(int moveCode) {
+    private void drawPerformanceWall(int moveCode, boolean isPlayerAMove, WallImpact wallImpact) {
         int row = GameState.decodeWallRow(moveCode);
         int col = GameState.decodeWallCol(moveCode);
         boolean isHorizontal = GameState.decodeWallIsHorizontal(moveCode);
@@ -249,22 +252,37 @@ final class GameBoardPanel {
         int x2 = isHorizontal ? x1 + 80 : x1;
         int y2 = isHorizontal ? y1 : y1 + 80;
 
-        drawLine(x1, x2, y1, y2);
+        drawLine(x1, x2, y1, y2, isPlayerAMove, wallImpact);
     }
 
-    private void drawLine(int x1, int x2, int y1, int y2) {
+    private void drawLine(int x1, int x2, int y1, int y2, boolean isFirstPlayer, WallImpact wallImpact) {
         Line line = new Line(x1, y1, x2, y2);
-        line.setStroke(GuiTheme.wall());
+        line.setStroke(playerColor(isFirstPlayer));
         line.setStrokeWidth(8);
         line.setStrokeLineCap(StrokeLineCap.ROUND);
-        wallLines.add(line);
+        wallLines.add(new PlacedWallLine(line, isFirstPlayer));
+        installWallImpactTooltip(line, wallImpact);
 
         Pane linePane = new Pane(line);
-        linePane.setMouseTransparent(true);
+        linePane.setPickOnBounds(false);
         gridPane.add(linePane, 0, 0, BOARD_SIZE, BOARD_SIZE);
+    }
+
+    private void installWallImpactTooltip(Line line, WallImpact wallImpact) {
+        Tooltip tooltip = new Tooltip(wallImpact.displayText());
+        tooltip.setShowDelay(Duration.seconds(1));
+        tooltip.setHideDelay(Duration.ZERO);
+        Tooltip.install(line, tooltip);
+    }
+
+    private Color playerColor(boolean isFirstPlayer) {
+        return isFirstPlayer ? GuiTheme.playerOne() : GuiTheme.playerTwo();
     }
 
     private boolean isBottomPlayer(Player player) {
         return player.getFinishRow() == 0;
+    }
+
+    private record PlacedWallLine(Line line, boolean isFirstPlayer) {
     }
 }

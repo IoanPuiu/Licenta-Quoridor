@@ -1,10 +1,10 @@
-package AI.MTCS;
+package AI.MCTS;
 
 import PerformanceModel.GameState;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-public final class MtcsState {
+public final class MctsState {
 
     // ============================================================
     // 1. CONSTANTE TABLĂ
@@ -111,14 +111,14 @@ public final class MtcsState {
     /*
      * Creează o stare optimizată pornind de la GameState-ul normal.
      */
-    public MtcsState(GameState state) {
+    public MctsState(GameState state) {
         this.adjacencyMask = new int[CELL_COUNT];
         this.topDistances = new int[CELL_COUNT];
         this.bottomDistances = new int[CELL_COUNT];
         this.bfsQueue = new int[CELL_COUNT];
 
         this.moveBuffer = new int[256];
-        this.rolloutMoveBuffer = new int[16];
+        this.rolloutMoveBuffer = new int[64];
         this.wallCandidateBuffer = new int[64];
 
         loadFromGameState(state);
@@ -128,7 +128,7 @@ public final class MtcsState {
      * Constructor de copiere rapidă.
      * Folosit dacă păstrezi câte o stare în fiecare nod MCTS.
      */
-    public MtcsState(MtcsState other) {
+    public MctsState(MctsState other) {
         this.currPlayerPos = other.currPlayerPos;
         this.opponentPos = other.opponentPos;
         this.currPlayerWalls = other.currPlayerWalls;
@@ -147,7 +147,7 @@ public final class MtcsState {
 
         this.bfsQueue = new int[CELL_COUNT];
         this.moveBuffer = new int[256];
-        this.rolloutMoveBuffer = new int[16];
+        this.rolloutMoveBuffer = new int[64];
         this.wallCandidateBuffer = new int[64];
     }
 
@@ -170,15 +170,15 @@ public final class MtcsState {
         verticalWalls = 0L;
         initializeFullAdjacencyGraph();
 
-            for (int wallMoveCode : state.getPlacedWalls()) {
-                int bitIndex = wallBitIndex(decodeWallRow(wallMoveCode), decodeWallCol(wallMoveCode));
-                if (decodeWallOrientation(wallMoveCode)) {
-                    horizontalWalls |= 1L << bitIndex;
-                } else {
-                    verticalWalls |= 1L << bitIndex;
-                }
-                removeEdgesBlockedByWall(wallMoveCode);
+        for (int wallMoveCode : state.getPlacedWalls()) {
+            int bitIndex = wallBitIndex(decodeWallRow(wallMoveCode), decodeWallCol(wallMoveCode));
+            if (decodeWallOrientation(wallMoveCode)) {
+                horizontalWalls |= 1L << bitIndex;
+            } else {
+                verticalWalls |= 1L << bitIndex;
             }
+            removeEdgesBlockedByWall(wallMoveCode);
+        }
         distancesDirty = true;
         // setează poziții, pereți disponibili, finish lines
         // construiește horizontalWalls / verticalWalls
@@ -667,11 +667,18 @@ public final class MtcsState {
      * Nu este obligatoriu să întoarcă toate mutările legale.
      * Pentru MCTS, este mai important să fie rapid și relevant.
      */
-    public int generateCandidateMoves(int[] outputBuffer) {
+
+    public int generateCandidateMoves(int[] outputBuffer, MctsSelectionHeuristic selectionHeuristic) {
         int count = 0;
+        MctsSelectionHeuristic selectedHeuristic = selectionHeuristic == null
+                ? MctsSelectionHeuristic.WALLS_NEAR_PAWNS
+                : selectionHeuristic;
 
         count = appendPawnMoves(outputBuffer, count);
-        count = appendRelevantWallMoves(outputBuffer, count);
+        count = switch (selectedHeuristic) {
+            case WALLS_NEAR_PAWNS -> appendRelevantWallMoves(outputBuffer, count);
+            case WALLS_NEAR_PAWNS_EXISTING_WALLS_AND_EDGES -> appendWallMovesNearPawnsWallsEdges(outputBuffer, count);
+        };
 
         return count;
     }
@@ -680,11 +687,33 @@ public final class MtcsState {
      * Adaugă mutările pionului în buffer.
      */
     private int appendPawnMoves(int[] outputBuffer, int count) {
+
         int pawnCount = generatePawnMoves(rolloutMoveBuffer);
+        boolean findMoveOnShortestPath = false;
+
+        ensureDistancesUpdated();
+        int currentShortestDist = currPlayerFinishLine == 0 ?
+                topDistances[currPlayerPos] :
+                bottomDistances[currPlayerPos];
 
         for (int i = 0; i < pawnCount; i++) {
-            outputBuffer[count++] = rolloutMoveBuffer[i];
+
+            int newShortestDist = currPlayerFinishLine == 0 ?
+                    topDistances[rolloutMoveBuffer[i] - 200] :
+                    bottomDistances[rolloutMoveBuffer[i] - 200];
+            if (currentShortestDist - newShortestDist > 0) {
+                outputBuffer[count++] = rolloutMoveBuffer[i];
+                findMoveOnShortestPath = true;
+            }
+
         }
+
+        if (!findMoveOnShortestPath)
+
+            for (int i = 0; i < pawnCount; i++) {
+                outputBuffer[count++] = rolloutMoveBuffer[i];
+            }
+
 
         return count;
     }
@@ -696,7 +725,6 @@ public final class MtcsState {
      * - lângă drumul minim al adversarului
      * - lângă adversar
      * - pereți care cresc distanța adversarului
-     * - pereți care nu cresc mult distanța proprie
      */
     private int appendRelevantWallMoves(int[] outputBuffer, int count) {
         if (currPlayerWalls == 0) {
@@ -709,40 +737,157 @@ public final class MtcsState {
         int currRow = rowOf(currPlayerPos);
         int currCol = colOf(currPlayerPos);
 
-        for (int centerIndex = 0; centerIndex < 2; centerIndex++) {
-            int centerRow = centerIndex == 0 ? opponentRow : currRow;
-            int centerCol = centerIndex == 0 ? opponentCol : currCol;
+        candidateCount = appendWallMovesNearPawn(candidateCount, opponentRow, opponentCol);
+        candidateCount = appendWallMovesNearPawn(candidateCount, currRow, currCol);
 
-            for (int row = centerRow - 1; row <= centerRow; row++) {
-                for (int col = centerCol - 1; col <= centerCol; col++) {
-                    if (row < 0 || row >= WALL_GRID_SIZE || col < 0 || col >= WALL_GRID_SIZE) {
-                        continue;
-                    }
+        return appendBestScoredWallMoves(
+                outputBuffer,
+                count,
+                candidateCount,
+                opponentRow,
+                opponentCol,
+                currRow,
+                currCol);
+    }
 
-                    int horizontalMove = encodeWallMove(row, col, true);
-                    int verticalMove = encodeWallMove(row, col, false);
-                    boolean horizontalFound = false;
-                    boolean verticalFound = false;
+    /*
+     * Adaugă pereți candidați lângă pioni, lângă pereții existenți și
+     * pe marginile laterale. Generarea rămâne pe buffer fix și filtrează
+     * rapid sloturile imposibile înainte de verificările BFS mai scumpe.
+     */
+    private int appendWallMovesNearPawnsWallsEdges(int[] outputBuffer, int count) {
+        if (currPlayerWalls == 0) {
+            return count;
+        }
 
-                    for (int i = 0; i < candidateCount; i++) {
-                        if (wallCandidateBuffer[i] == horizontalMove) {
-                            horizontalFound = true;
-                        }
-                        if (wallCandidateBuffer[i] == verticalMove) {
-                            verticalFound = true;
-                        }
-                    }
+        int candidateCount = 0;
+        int opponentRow = rowOf(opponentPos);
+        int opponentCol = colOf(opponentPos);
+        int currRow = rowOf(currPlayerPos);
+        int currCol = colOf(currPlayerPos);
 
-                    if (!horizontalFound && candidateCount < wallCandidateBuffer.length) {
-                        wallCandidateBuffer[candidateCount++] = horizontalMove;
-                    }
-                    if (!verticalFound && candidateCount < wallCandidateBuffer.length) {
-                        wallCandidateBuffer[candidateCount++] = verticalMove;
-                    }
+        candidateCount = appendWallMovesNearPawn(candidateCount, opponentRow, opponentCol);
+        candidateCount = appendWallMovesNearPawn(candidateCount, currRow, currCol);
+        candidateCount = appendHorizontalWallMovesOnSideEdges(candidateCount);
+        candidateCount = appendWallMovesNearExistingWalls(candidateCount);
+
+        return appendBestScoredWallMoves(
+                outputBuffer,
+                count,
+                candidateCount,
+                opponentRow,
+                opponentCol,
+                currRow,
+                currCol);
+    }
+
+    private int appendWallMovesNearPawn(int candidateCount, int centerRow, int centerCol) {
+        for (int row = centerRow - 1; row <= centerRow; row++) {
+            for (int col = centerCol - 1; col <= centerCol; col++) {
+                candidateCount = appendWallMovesAtAnchor(candidateCount, row, col);
+                if (candidateCount >= wallCandidateBuffer.length) {
+                    return candidateCount;
                 }
             }
         }
 
+        return candidateCount;
+    }
+
+    private int appendHorizontalWallMovesOnSideEdges(int candidateCount) {
+        for (int row = 0; row < WALL_GRID_SIZE; row++) {
+            candidateCount = appendWallCandidate(candidateCount, encodeWallMove(row, 0, true));
+            candidateCount = appendWallCandidate(
+                    candidateCount,
+                    encodeWallMove(row, WALL_GRID_SIZE - 1, true));
+            if (candidateCount >= wallCandidateBuffer.length) {
+                return candidateCount;
+            }
+        }
+
+        return candidateCount;
+    }
+
+    private int appendWallMovesNearExistingWalls(int candidateCount) {
+        long existingWallSlots = horizontalWalls | verticalWalls;
+
+        while (existingWallSlots != 0L && candidateCount < wallCandidateBuffer.length) {
+            int bitIndex = Long.numberOfTrailingZeros(existingWallSlots);
+            existingWallSlots &= existingWallSlots - 1;
+
+            int wallRow = bitIndex / WALL_GRID_SIZE;
+            int wallCol = bitIndex % WALL_GRID_SIZE;
+            for (int row = wallRow - 1; row <= wallRow + 1; row++) {
+                for (int col = wallCol - 1; col <= wallCol + 1; col++) {
+                    if (row == wallRow && col == wallCol) {
+                        continue;
+                    }
+                    candidateCount = appendWallMovesAtAnchor(candidateCount, row, col);
+                    if (candidateCount >= wallCandidateBuffer.length) {
+                        return candidateCount;
+                    }
+                }
+            }
+
+            boolean horizontal = (horizontalWalls & (1L << bitIndex)) != 0;
+            if (horizontal) {
+                candidateCount = appendWallMove(candidateCount, wallRow, wallCol - 2, true);
+                candidateCount = appendWallMove(candidateCount, wallRow, wallCol + 2, true);
+            } else {
+                candidateCount = appendWallMove(candidateCount, wallRow - 2, wallCol, false);
+                candidateCount = appendWallMove(candidateCount, wallRow + 2, wallCol, false);
+            }
+        }
+
+        return candidateCount;
+    }
+
+    private int appendWallMovesAtAnchor(int candidateCount, int row, int col) {
+        candidateCount = appendWallMove(candidateCount, row, col, true);
+        return appendWallMove(candidateCount, row, col, false);
+    }
+
+    private int appendWallMove(int candidateCount, int row, int col, boolean horizontal) {
+        if (row < 0 || row >= WALL_GRID_SIZE || col < 0 || col >= WALL_GRID_SIZE) {
+            return candidateCount;
+        }
+
+        return appendWallCandidate(candidateCount, encodeWallMove(row, col, horizontal));
+    }
+
+    private int appendWallCandidate(int candidateCount, int move) {
+        if (candidateCount >= wallCandidateBuffer.length) {
+            return candidateCount;
+        }
+
+        int row = decodeWallRow(move);
+        int col = decodeWallCol(move);
+        if (row < 0 || row >= WALL_GRID_SIZE || col < 0 || col >= WALL_GRID_SIZE) {
+            return candidateCount;
+        }
+        if (!isWallSlotFree(move)) {
+            return candidateCount;
+        }
+
+        for (int i = 0; i < candidateCount; i++) {
+            if (wallCandidateBuffer[i] == move) {
+                return candidateCount;
+            }
+        }
+
+        wallCandidateBuffer[candidateCount++] = move;
+        return candidateCount;
+    }
+
+    private int appendBestScoredWallMoves(
+            int[] outputBuffer,
+            int count,
+            int candidateCount,
+            int opponentRow,
+            int opponentCol,
+            int currRow,
+            int currCol
+    ) {
         int currentDistanceBefore = getCurrentPlayerDistanceToFinish();
         int opponentDistanceBefore = getOpponentDistanceToFinish();
         int maxWalls = 8;
@@ -794,12 +939,10 @@ public final class MtcsState {
 
                 int currentDistanceAfter = getCurrentPlayerDistanceToFinish();
                 int opponentDistanceAfter = getOpponentDistanceToFinish();
-                int distanceToOpponent = Math.abs(row - opponentRow) + Math.abs(col - opponentCol);
-                int distanceToCurrent = Math.abs(row - currRow) + Math.abs(col - currCol);
                 int score = 100 * (opponentDistanceAfter - opponentDistanceBefore)
-                        - 70 * (currentDistanceAfter - currentDistanceBefore)
-                        + 8 * (4 - distanceToOpponent)
-                        - 3 * (4 - distanceToCurrent);
+                        - 110 * (currentDistanceAfter - currentDistanceBefore);
+
+                if (score <= 0) continue;
 
                 adjacencyMask[firstA] = oldFirstA;
                 adjacencyMask[firstB] = oldFirstB;
@@ -848,17 +991,74 @@ public final class MtcsState {
         return generatePawnMoves(outputBuffer);
     }
 
+    public int generateRolloutMoves(
+            int[] outputBuffer,
+            MctsRolloutHeuristic rolloutHeuristic,
+            ThreadLocalRandom random) {
+        int count = appendPawnMoves(outputBuffer, 0);
+        MctsRolloutHeuristic selectedHeuristic = rolloutHeuristic == null
+                ? MctsRolloutHeuristic.PAWN_MOVES
+                : rolloutHeuristic;
+
+        return switch (selectedHeuristic) {
+            case PAWN_MOVES -> count;
+            case PAWN_MOVES_RANDOM_WALLS -> appendRandomWallMoves(outputBuffer, count, random);
+            case PAWN_MOVES_RELEVANT_WALLS -> appendRelevantWallMoves(outputBuffer, count);
+        };
+    }
+
+    private int appendRandomWallMoves(int[] outputBuffer, int count, ThreadLocalRandom random) {
+        if (currPlayerWalls == 0) {
+            return count;
+        }
+
+        int addedWalls = 0;
+        int attempts = 0;
+        int maxWalls = 4;
+
+        while (addedWalls < maxWalls && attempts < 32 && count < outputBuffer.length) {
+            attempts++;
+            int move = encodeWallMove(
+                    random.nextInt(WALL_GRID_SIZE),
+                    random.nextInt(WALL_GRID_SIZE),
+                    random.nextBoolean());
+
+            if (!isLegalWallMove(move) || containsMove(outputBuffer, count, move)) {
+                continue;
+            }
+
+            outputBuffer[count++] = move;
+            addedWalls++;
+        }
+
+        return count;
+    }
+
+    private boolean containsMove(int[] outputBuffer, int count, int move) {
+        for (int i = 0; i < count; i++) {
+            if (outputBuffer[i] == move) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /*
      * Alege o mutare rapidă pentru rollout.
      */
     public int selectRolloutMove(ThreadLocalRandom random) {
+        return selectRolloutMove(random, MctsRolloutHeuristic.PAWN_MOVES);
+    }
+
+    public int selectRolloutMove(ThreadLocalRandom random, MctsRolloutHeuristic rolloutHeuristic) {
         int winningMove = findImmediateWinningPawnMove();
 
         if (winningMove != -1) {
             return winningMove;
         }
 
-        int count = generateRolloutMoves(rolloutMoveBuffer);
+        int count = generateRolloutMoves(rolloutMoveBuffer, rolloutHeuristic, random);
 
         if (count == 0) {
             return -1;

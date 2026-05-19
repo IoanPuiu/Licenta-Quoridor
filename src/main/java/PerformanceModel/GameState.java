@@ -129,8 +129,12 @@ public class GameState {
     }
 
     public int wallImpact(int wallCode) {
+        return wallImpactBreakdown(wallCode).net();
+    }
+
+    public WallImpact wallImpactBreakdown(int wallCode) {
         if (isPawnMoveCode(wallCode)) {
-            return 0;
+            return WallImpact.none();
         }
         if (!isLegalWallPlacement(wallCode)) {
             throw new IllegalArgumentException("Illegal wall placement code: " + wallCode);
@@ -156,7 +160,7 @@ public class GameState {
 
         int movesAddedToOpponent = opponentDistanceAfter - opponentDistanceBefore;
         int movesAddedToCurrentPlayer = currentPlayerDistanceAfter - currentPlayerDistanceBefore;
-        return movesAddedToOpponent - movesAddedToCurrentPlayer;
+        return new WallImpact(movesAddedToOpponent, movesAddedToCurrentPlayer);
     }
 
 

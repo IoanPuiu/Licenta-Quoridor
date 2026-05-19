@@ -3,10 +3,11 @@ package SlowModel;
 import AI.Algorithm;
 import AI.GymPython;
 import AI.MiniMax;
-import AI.MTCS.MtcsPerformance;
-import AI.MTCS.MtcsV0;
+import AI.MCTS.MctsPerformance;
+import AI.MCTS.MctsV0;
 import GUI.GameUI;
 import PerformanceModel.GameState;
+import PerformanceModel.WallImpact;
 import javafx.application.Platform;
 
 import java.util.ArrayList;
@@ -208,7 +209,11 @@ public class Game {
         Move move = createMoveFromCode(moveCode, player);
         MoveApplicationResult moveResult = makeMoveIfCurrent(move, player, currentVersion);
         if (moveResult.moveMade()) {
-            recordThinkingTime(move, thinkingTimeNanos, moveResult.includeInAverage(), moveResult.wallImpact());
+            recordThinkingTime(
+                    moveResult.move(),
+                    thinkingTimeNanos,
+                    moveResult.includeInAverage(),
+                    moveResult.wallImpact());
             return new TurnResult(true, thinkingTimeNanos);
         }
         return new TurnResult(false, 0);
@@ -229,7 +234,11 @@ public class Game {
             MoveApplicationResult moveResult = makeLegalHumanMove(move, player, currentVersion);
             if (moveResult.moveMade()) {
                 long thinkingTimeNanos = System.nanoTime() - thinkingStartedAt;
-                recordThinkingTime(move, thinkingTimeNanos, moveResult.includeInAverage(), moveResult.wallImpact());
+                recordThinkingTime(
+                        moveResult.move(),
+                        thinkingTimeNanos,
+                        moveResult.includeInAverage(),
+                        moveResult.wallImpact());
                 return new TurnResult(true, thinkingTimeNanos);
             }
         } while (true);
@@ -253,7 +262,7 @@ public class Game {
     private MoveApplicationResult makeLegalHumanMove(Move move, Player player, int currentVersion) {
         synchronized (gameLock) {
             if (!isCurrentTurn(player, currentVersion) || !board.isLegalMove(move)) {
-                return new MoveApplicationResult(false, false, 0);
+                return new MoveApplicationResult(null, false, false, 0);
             }
         }
 
@@ -264,27 +273,34 @@ public class Game {
         boolean undoAvailable;
         boolean includeInAverage;
         int wallImpact;
+        Move appliedMove;
         synchronized (gameLock) {
             if (!isCurrentTurn(player, currentVersion)) {
-                return new MoveApplicationResult(false, false, 0);
+                return new MoveApplicationResult(null, false, false, 0);
             }
             int moveCode = encodeMoveCode(move);
             includeInAverage = player.wallsLeft() > 0;
-            wallImpact = move.getType() == MoveType.WALL_PLACE ? aiState.wallImpact(moveCode) : 0;
+            WallImpact wallImpactBreakdown = move.getType() == MoveType.WALL_PLACE
+                    ? aiState.wallImpactBreakdown(moveCode)
+                    : WallImpact.none();
+            wallImpact = wallImpactBreakdown.net();
+            appliedMove = move.getType() == MoveType.WALL_PLACE
+                    ? move.withWallImpact(wallImpactBreakdown)
+                    : move;
             GameState nextAiState = new GameState(aiState);
             nextAiState.update(moveCode);
-            board.update(move);
-            player.update(move);
+            board.update(appliedMove);
+            player.update(appliedMove);
             aiState = nextAiState;
-            moveHistory.add(move);
+            moveHistory.add(appliedMove);
             undoAvailable = hasHumanMoveInHistory();
         }
 
         Platform.runLater(() -> {
-            gui.draw(uiToken, move);
+            gui.draw(uiToken, appliedMove);
             gui.setUndoAvailable(uiToken, undoAvailable);
         });
-        return new MoveApplicationResult(true, includeInAverage, wallImpact);
+        return new MoveApplicationResult(appliedMove, true, includeInAverage, wallImpact);
     }
 
     private Move createMoveFromCode(int moveCode, Player player) {
@@ -321,9 +337,13 @@ public class Game {
             case MINIMAX -> new MiniMax(
                     playerProfile.minimaxDepth(),
                     playerProfile.minimaxMoveOrdering());
-            case MTCS_EASY, MTCS_MEDIUM, MTCS_HARD, MTCS_EXTREME -> playerProfile.mtcsVariant() == PlayerProfile.MtcsVariant.PERFORMANCE
-                    ? new MtcsPerformance(playerProfile.mtcsDepth())
-                    : new MtcsV0(playerProfile.mtcsDepth());
+            case MCTS_EASY, MCTS_MEDIUM, MCTS_HARD, MCTS_EXTREME -> playerProfile.mctsVariant() == PlayerProfile.MctsVariant.PERFORMANCE
+                    ? new MctsPerformance(
+                            playerProfile.mctsDepth(),
+                            playerProfile.mctsRolloutMoveLimit(),
+                            playerProfile.mctsSelectionHeuristic(),
+                            playerProfile.mctsRolloutHeuristic())
+                    : new MctsV0(playerProfile.mctsDepth(), playerProfile.mctsRolloutMoveLimit());
             case GYM_PYTHON -> new GymPython();
             case HUMAN -> null;
         };
@@ -563,7 +583,7 @@ public class Game {
     private record MoveThinkingTime(Move move, long thinkingTimeNanos, boolean includeInAverage, int wallImpact) {
     }
 
-    private record MoveApplicationResult(boolean moveMade, boolean includeInAverage, int wallImpact) {
+    private record MoveApplicationResult(Move move, boolean moveMade, boolean includeInAverage, int wallImpact) {
     }
 
     private record TurnResult(boolean moveMade, long thinkingTimeNanos) {

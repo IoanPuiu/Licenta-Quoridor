@@ -1,24 +1,32 @@
 package SlowModel;
 
+import AI.MCTS.MctsRolloutHeuristic;
+import AI.MCTS.MctsSelectionHeuristic;
 import AI.MiniMax.MoveOrdering;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public record PlayerProfile(
         PlayerType playerType,
         String humanName,
         int minimaxDepth,
         MoveOrdering minimaxMoveOrdering,
-        int mtcsDepth,
-        MtcsVariant mtcsVariant,
+        int mctsDepth,
+        MctsVariant mctsVariant,
+        MctsSelectionHeuristic mctsSelectionHeuristic,
+        MctsRolloutHeuristic mctsRolloutHeuristic,
+        int mctsRolloutMoveLimit,
         String aiDisplayName) {
 
-    public enum MtcsVariant {
+    public enum MctsVariant {
         V0("V0", ""),
         PERFORMANCE("Performance", "-P");
 
         private final String label;
         private final String compactSuffix;
 
-        MtcsVariant(String label, String compactSuffix) {
+        MctsVariant(String label, String compactSuffix) {
             this.label = label;
             this.compactSuffix = compactSuffix;
         }
@@ -34,11 +42,19 @@ public record PlayerProfile(
 
     private static final int DEFAULT_MINIMAX_DEPTH = 2;
     private static final MoveOrdering DEFAULT_MINIMAX_MOVE_ORDERING = MoveOrdering.NONE;
-    private static final MtcsVariant DEFAULT_MTCS_VARIANT = MtcsVariant.V0;
-    private static final int MTCS_EASY_DEPTH = 8_000;
-    private static final int MTCS_MEDIUM_DEPTH = 16_000;
-    private static final int MTCS_HARD_DEPTH = 32_000;
-    private static final int MTCS_EXTREME_DEPTH = 64_000;
+    private static final MctsVariant DEFAULT_MCTS_VARIANT = MctsVariant.V0;
+    public static final MctsSelectionHeuristic DEFAULT_MCTS_SELECTION_HEURISTIC =
+            MctsSelectionHeuristic.WALLS_NEAR_PAWNS;
+    public static final MctsRolloutHeuristic DEFAULT_MCTS_ROLLOUT_HEURISTIC =
+            MctsRolloutHeuristic.PAWN_MOVES;
+    public static final int DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT = 32;
+    private static final int MCTS_EASY_DEPTH = 8_000;
+    private static final int MCTS_MEDIUM_DEPTH = 16_000;
+    private static final int MCTS_HARD_DEPTH = 32_000;
+    private static final int MCTS_EXTREME_DEPTH = 64_000;
+    private static final int MCTS_SHORT_ROLLOUT_MOVE_LIMIT = 16;
+    private static final int MCTS_MEDIUM_ROLLOUT_MOVE_LIMIT = DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT;
+    private static final int MCTS_LONG_ROLLOUT_MOVE_LIMIT = 64;
 
     public PlayerProfile {
         if (playerType == null) {
@@ -50,11 +66,24 @@ public record PlayerProfile(
         if (minimaxMoveOrdering == null) {
             minimaxMoveOrdering = DEFAULT_MINIMAX_MOVE_ORDERING;
         }
-        if (mtcsDepth < 1) {
-            throw new IllegalArgumentException("MTCS depth must be at least 1.");
+        if (mctsDepth < 1) {
+            throw new IllegalArgumentException("MCTS depth must be at least 1.");
         }
-        if (mtcsVariant == null) {
-            mtcsVariant = DEFAULT_MTCS_VARIANT;
+        if (mctsVariant == null) {
+            mctsVariant = DEFAULT_MCTS_VARIANT;
+        }
+        if (mctsSelectionHeuristic == null) {
+            mctsSelectionHeuristic = DEFAULT_MCTS_SELECTION_HEURISTIC;
+        }
+        if (mctsRolloutHeuristic == null) {
+            mctsRolloutHeuristic = DEFAULT_MCTS_ROLLOUT_HEURISTIC;
+        }
+        if (!isSupportedMctsRolloutMoveLimit(mctsRolloutMoveLimit)) {
+            throw new IllegalArgumentException("MCTS rollout move limit must be one of 16, 32, or 64.");
+        }
+        if (mctsVariant != MctsVariant.PERFORMANCE) {
+            mctsSelectionHeuristic = DEFAULT_MCTS_SELECTION_HEURISTIC;
+            mctsRolloutHeuristic = DEFAULT_MCTS_ROLLOUT_HEURISTIC;
         }
     }
 
@@ -64,8 +93,11 @@ public record PlayerProfile(
                 humanName,
                 DEFAULT_MINIMAX_DEPTH,
                 DEFAULT_MINIMAX_MOVE_ORDERING,
-                defaultMtcsDepth(playerType),
-                DEFAULT_MTCS_VARIANT,
+                defaultMctsDepth(playerType),
+                DEFAULT_MCTS_VARIANT,
+                DEFAULT_MCTS_SELECTION_HEURISTIC,
+                DEFAULT_MCTS_ROLLOUT_HEURISTIC,
+                DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT,
                 null);
     }
 
@@ -82,27 +114,57 @@ public record PlayerProfile(
                 "",
                 depth,
                 ordering,
-                MTCS_MEDIUM_DEPTH,
-                DEFAULT_MTCS_VARIANT,
+                MCTS_MEDIUM_DEPTH,
+                DEFAULT_MCTS_VARIANT,
+                DEFAULT_MCTS_SELECTION_HEURISTIC,
+                DEFAULT_MCTS_ROLLOUT_HEURISTIC,
+                DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT,
                 "MM%d%s".formatted(depth, ordering.compactSuffix()));
     }
 
-    public static PlayerProfile mtcs(int depth) {
-        return mtcs(depth, DEFAULT_MTCS_VARIANT);
+    public static PlayerProfile mcts(int depth) {
+        return mcts(depth, DEFAULT_MCTS_VARIANT);
     }
 
-    public static PlayerProfile mtcs(int depth, MtcsVariant variant) {
-        MtcsVariant selectedVariant = variant == null
-                ? DEFAULT_MTCS_VARIANT
+    public static PlayerProfile mcts(int depth, MctsVariant variant) {
+        return mcts(depth, variant, DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT);
+    }
+
+    public static PlayerProfile mcts(int depth, MctsVariant variant, int rolloutMoveLimit) {
+        return mcts(
+                depth,
+                variant,
+                DEFAULT_MCTS_SELECTION_HEURISTIC,
+                DEFAULT_MCTS_ROLLOUT_HEURISTIC,
+                rolloutMoveLimit);
+    }
+
+    public static PlayerProfile mcts(
+            int depth,
+            MctsVariant variant,
+            MctsSelectionHeuristic selectionHeuristic,
+            MctsRolloutHeuristic rolloutHeuristic,
+            int rolloutMoveLimit) {
+        MctsVariant selectedVariant = variant == null
+                ? DEFAULT_MCTS_VARIANT
                 : variant;
+        MctsSelectionHeuristic selectedSelectionHeuristic = selectedVariant == MctsVariant.PERFORMANCE
+                ? defaultIfNull(selectionHeuristic, DEFAULT_MCTS_SELECTION_HEURISTIC)
+                : DEFAULT_MCTS_SELECTION_HEURISTIC;
+        MctsRolloutHeuristic selectedRolloutHeuristic = selectedVariant == MctsVariant.PERFORMANCE
+                ? defaultIfNull(rolloutHeuristic, DEFAULT_MCTS_ROLLOUT_HEURISTIC)
+                : DEFAULT_MCTS_ROLLOUT_HEURISTIC;
         return new PlayerProfile(
-                mtcsTypeForDepth(depth),
+                mctsTypeForDepth(depth),
                 "",
                 DEFAULT_MINIMAX_DEPTH,
                 DEFAULT_MINIMAX_MOVE_ORDERING,
                 depth,
                 selectedVariant,
-                mtcsDisplayName(depth, selectedVariant));
+                selectedSelectionHeuristic,
+                selectedRolloutHeuristic,
+                rolloutMoveLimit,
+                mctsDisplayName(depth, selectedVariant, rolloutMoveLimit));
     }
 
     public static PlayerProfile gymPython() {
@@ -127,54 +189,166 @@ public record PlayerProfile(
         if (playerType == PlayerType.MINIMAX) {
             return "MiniMax D%d - %s".formatted(minimaxDepth, minimaxMoveOrdering.label());
         }
-        if (isMtcsPlayer()) {
-            return "%s - %s".formatted(mtcsDisplayName(depthOrDefaultMtcsDepth()), mtcsVariant.label());
+        if (isMctsPlayer()) {
+            return "%s - %s - Rollout %d".formatted(
+                    mctsDisplayName(depthOrDefaultMctsDepth()),
+                    mctsVariant.label(),
+                    mctsRolloutMoveLimit);
         }
         return displayName(fallbackName);
     }
 
-    private boolean isMtcsPlayer() {
-        return playerType == PlayerType.MTCS_EASY
-                || playerType == PlayerType.MTCS_MEDIUM
-                || playerType == PlayerType.MTCS_HARD
-                || playerType == PlayerType.MTCS_EXTREME;
+    public String cardTitle(String fallbackName) {
+        if (playerType == PlayerType.HUMAN) {
+            return displayName(fallbackName);
+        }
+        if (playerType == PlayerType.MINIMAX) {
+            return "MiniMax";
+        }
+        if (isMctsPlayer()) {
+            return "MCTS";
+        }
+        return displayName(fallbackName);
     }
 
-    private int depthOrDefaultMtcsDepth() {
-        return mtcsDepth > 0 ? mtcsDepth : defaultMtcsDepth(playerType);
+    public String cardSettingsSummary(String fallbackName) {
+        return String.join(" | ", cardSettingsSummaryParts(fallbackName));
     }
 
-    private static int defaultMtcsDepth(PlayerType playerType) {
+    public String cardSettingsDetails(String fallbackName) {
+        return String.join(System.lineSeparator(), cardSettingsDetailLines(fallbackName));
+    }
+
+    private List<String> cardSettingsSummaryParts(String fallbackName) {
+        if (playerType == PlayerType.HUMAN) {
+            return List.of("Human", "Name: " + displayName(fallbackName));
+        }
+        if (playerType == PlayerType.MINIMAX) {
+            return List.of(
+                    "Depth " + minimaxDepth,
+                    minimaxMoveOrdering.label());
+        }
+        if (isMctsPlayer()) {
+            List<String> parts = new ArrayList<>();
+            parts.add("D" + compactMctsDepth(depthOrDefaultMctsDepth()));
+            parts.add(mctsVariant.label());
+            if (mctsVariant == MctsVariant.PERFORMANCE) {
+                parts.add("Sel " + compactSelectionHeuristic());
+                parts.add("Roll " + compactRolloutHeuristic());
+            }
+            parts.add("Limit " + mctsRolloutMoveLimit);
+            return parts;
+        }
+        return List.of(displayName(fallbackName));
+    }
+
+    private List<String> cardSettingsDetailLines(String fallbackName) {
+        if (playerType == PlayerType.HUMAN) {
+            return List.of(
+                    "Type: Human",
+                    "Name: " + displayName(fallbackName));
+        }
+        if (playerType == PlayerType.MINIMAX) {
+            return List.of(
+                    "Type: MiniMax",
+                    "Depth: " + minimaxDepth,
+                    "Move ordering: " + minimaxMoveOrdering.label());
+        }
+        if (isMctsPlayer()) {
+            List<String> lines = new ArrayList<>();
+            lines.add("Type: MCTS");
+            lines.add("Depth: " + compactMctsDepth(depthOrDefaultMctsDepth()));
+            lines.add("Variant: " + mctsVariant.label());
+            if (mctsVariant == MctsVariant.PERFORMANCE) {
+                lines.add("Selection heuristic: " + mctsSelectionHeuristic.label());
+                lines.add("Rollout heuristic: " + mctsRolloutHeuristic.label());
+            }
+            lines.add("Rollout limit: " + mctsRolloutMoveLimit);
+            return lines;
+        }
+        return List.of("Type: " + displayName(fallbackName));
+    }
+
+    private boolean isMctsPlayer() {
+        return playerType == PlayerType.MCTS_EASY
+                || playerType == PlayerType.MCTS_MEDIUM
+                || playerType == PlayerType.MCTS_HARD
+                || playerType == PlayerType.MCTS_EXTREME;
+    }
+
+    private int depthOrDefaultMctsDepth() {
+        return mctsDepth > 0 ? mctsDepth : defaultMctsDepth(playerType);
+    }
+
+    private static int defaultMctsDepth(PlayerType playerType) {
         return switch (playerType) {
-            case MTCS_EASY -> MTCS_EASY_DEPTH;
-            case MTCS_MEDIUM -> MTCS_MEDIUM_DEPTH;
-            case MTCS_HARD -> MTCS_HARD_DEPTH;
-            case MTCS_EXTREME -> MTCS_EXTREME_DEPTH;
-            default -> MTCS_MEDIUM_DEPTH;
+            case MCTS_EASY -> MCTS_EASY_DEPTH;
+            case MCTS_MEDIUM -> MCTS_MEDIUM_DEPTH;
+            case MCTS_HARD -> MCTS_HARD_DEPTH;
+            case MCTS_EXTREME -> MCTS_EXTREME_DEPTH;
+            default -> MCTS_MEDIUM_DEPTH;
         };
     }
 
-    private static PlayerType mtcsTypeForDepth(int depth) {
-        if (depth <= MTCS_EASY_DEPTH) {
-            return PlayerType.MTCS_EASY;
+    private static PlayerType mctsTypeForDepth(int depth) {
+        if (depth <= MCTS_EASY_DEPTH) {
+            return PlayerType.MCTS_EASY;
         }
-        if (depth <= MTCS_MEDIUM_DEPTH) {
-            return PlayerType.MTCS_MEDIUM;
+        if (depth <= MCTS_MEDIUM_DEPTH) {
+            return PlayerType.MCTS_MEDIUM;
         }
-        if (depth <= MTCS_HARD_DEPTH) {
-            return PlayerType.MTCS_HARD;
+        if (depth <= MCTS_HARD_DEPTH) {
+            return PlayerType.MCTS_HARD;
         }
-        return PlayerType.MTCS_EXTREME;
+        return PlayerType.MCTS_EXTREME;
     }
 
-    private static String mtcsDisplayName(int depth) {
+    private static String mctsDisplayName(int depth) {
         if (depth % 1_000 == 0) {
             return "MCTS%dK".formatted(depth / 1_000);
         }
         return "MCTS%d".formatted(depth);
     }
 
-    private static String mtcsDisplayName(int depth, MtcsVariant variant) {
-        return mtcsDisplayName(depth) + variant.compactSuffix();
+    private static String compactMctsDepth(int depth) {
+        if (depth % 1_000 == 0) {
+            return "%dK".formatted(depth / 1_000);
+        }
+        return String.valueOf(depth);
+    }
+
+    private String compactSelectionHeuristic() {
+        return switch (mctsSelectionHeuristic) {
+            case WALLS_NEAR_PAWNS -> "Pawns";
+            case WALLS_NEAR_PAWNS_EXISTING_WALLS_AND_EDGES -> "Pawns+walls+edges";
+        };
+    }
+
+    private String compactRolloutHeuristic() {
+        return switch (mctsRolloutHeuristic) {
+            case PAWN_MOVES -> "Pawns";
+            case PAWN_MOVES_RANDOM_WALLS -> "Random walls";
+            case PAWN_MOVES_RELEVANT_WALLS -> "Relevant";
+        };
+    }
+
+    private static String mctsDisplayName(int depth, MctsVariant variant, int rolloutMoveLimit) {
+        return mctsDisplayName(depth) + variant.compactSuffix() + rolloutCompactSuffix(rolloutMoveLimit);
+    }
+
+    private static String rolloutCompactSuffix(int rolloutMoveLimit) {
+        return rolloutMoveLimit == DEFAULT_MCTS_ROLLOUT_MOVE_LIMIT
+                ? ""
+                : "-R%d".formatted(rolloutMoveLimit);
+    }
+
+    private static boolean isSupportedMctsRolloutMoveLimit(int rolloutMoveLimit) {
+        return rolloutMoveLimit == MCTS_SHORT_ROLLOUT_MOVE_LIMIT
+                || rolloutMoveLimit == MCTS_MEDIUM_ROLLOUT_MOVE_LIMIT
+                || rolloutMoveLimit == MCTS_LONG_ROLLOUT_MOVE_LIMIT;
+    }
+
+    private static <T> T defaultIfNull(T value, T defaultValue) {
+        return value == null ? defaultValue : value;
     }
 }
