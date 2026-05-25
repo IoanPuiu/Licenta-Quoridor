@@ -5,11 +5,6 @@ import PerformanceModel.GameState;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class MctsState {
-
-    // ============================================================
-    // 1. CONSTANTE TABLĂ
-    // ============================================================
-
     public static final int BOARD_SIZE = 9;
     public static final int CELL_COUNT = BOARD_SIZE * BOARD_SIZE; // 81
     public static final int WALL_GRID_SIZE = BOARD_SIZE - 1;      // 8
@@ -23,11 +18,6 @@ public final class MctsState {
     private static final int LEFT = 4;
     private static final int RIGHT = 8;
 
-
-    // ============================================================
-    // 2. STARE JUCĂTORI
-    // ============================================================
-
     private int currPlayerPos;
     private int opponentPos;
 
@@ -36,81 +26,30 @@ public final class MctsState {
 
     private int currPlayerFinishLine;
     private int opponentFinishLine;
-
-
-    // ============================================================
-    // 3. PEREȚI
-    // ============================================================
-
-    /*
-     * Pereții sunt reprezentați ca bitset-uri.
-     *
-     * Pentru tablă 9x9 există 8x8 poziții posibile pentru fiecare orientare.
-     * Deci avem 64 pereți orizontali și 64 verticali.
-     *
-     * Un long are 64 biți, deci este perfect.
-     */
     private long horizontalWalls;
     private long verticalWalls;
-
-
-    // ============================================================
-    // 4. GRAF OPTIMIZAT
-    // ============================================================
-
     /*
-     * adjacencyMask[pos] spune în ce direcții se poate merge din celula pos.
-     *
-     * Exemplu:
-     * adjacencyMask[40] = UP | DOWN | LEFT
-     *
-     * Înseamnă că din celula 40 poți merge sus, jos și stânga,
-     * dar nu dreapta.
+    GRAF OPTIMIZAT
+
+      adjacencyMask[pos] spune în ce direcții se poate merge din celula pos.
+
+      Exemplu:
+      adjacencyMask[40] = UP | DOWN | LEFT
+
      */
     private final int[] adjacencyMask;
-
-
-    // ============================================================
-    // 5. DISTANȚE CĂTRE LINIILE DE FINISH
-    // ============================================================
-
-    /*
-     * topDistances[pos] = distanța minimă de la pos până la linia 0.
-     * bottomDistances[pos] = distanța minimă de la pos până la linia 8.
-     *
-     * Se recalculează doar la apel ensureDistancesUpdated().
-     */
     private final int[] topDistances;
     private final int[] bottomDistances;
 
     private boolean distancesDirty;
 
-
-    // ============================================================
-    // 6. BUFFER-E INTERNE PENTRU PERFORMANȚĂ
-    // ============================================================
-
-    /*
-     * Folosite pentru BFS fără să aloci Queue, LinkedList, HashSet etc.
-     */
     private final int[] bfsQueue;
 
-    /*
-     * Folosite pentru generarea mutărilor fără Set/List.
-     * Metodele vor returna numărul de mutări scrise în buffer.
-     */
     private final int[] moveBuffer;
     private final int[] rolloutMoveBuffer;
     private final int[] wallCandidateBuffer;
 
 
-    // ============================================================
-    // 7. CONSTRUCTORI
-    // ============================================================
-
-    /*
-     * Creează o stare optimizată pornind de la GameState-ul normal.
-     */
     public MctsState(GameState state) {
         this.adjacencyMask = new int[CELL_COUNT];
         this.topDistances = new int[CELL_COUNT];
@@ -124,10 +63,6 @@ public final class MctsState {
         loadFromGameState(state);
     }
 
-    /*
-     * Constructor de copiere rapidă.
-     * Folosit dacă păstrezi câte o stare în fiecare nod MCTS.
-     */
     public MctsState(MctsState other) {
         this.currPlayerPos = other.currPlayerPos;
         this.opponentPos = other.opponentPos;
@@ -152,13 +87,6 @@ public final class MctsState {
     }
 
 
-    // ============================================================
-    // 8. INIȚIALIZARE
-    // ============================================================
-
-    /*
-     * Copiază informațiile esențiale din GameState-ul tău actual.
-     */
     private void loadFromGameState(GameState state) {
         currPlayerPos = state.getCurrPlayerPos();
         opponentPos = state.getOpponentPos();
@@ -180,16 +108,8 @@ public final class MctsState {
             removeEdgesBlockedByWall(wallMoveCode);
         }
         distancesDirty = true;
-        // setează poziții, pereți disponibili, finish lines
-        // construiește horizontalWalls / verticalWalls
-        // inițializează adjacencyMask
-        // elimină muchiile blocate de pereții deja existenți
-        // marchează distancesDirty = true
     }
 
-    /*
-     * Construiește graful inițial complet al tablei fără pereți.
-     */
     private void initializeFullAdjacencyGraph() {
         for (int row = 0; row < BOARD_SIZE; row++) {
             for (int col = 0; col < BOARD_SIZE; col++) {
@@ -211,17 +131,9 @@ public final class MctsState {
                 adjacencyMask[posOf(row, col)] = mask;
             }
         }
-        // pentru fiecare celulă setează UP/DOWN/LEFT/RIGHT dacă sunt valide
     }
 
 
-    // ============================================================
-    // 9. UPDATE STARE
-    // ============================================================
-
-    /*
-     * Aplică o mutare și apoi schimbă jucătorii.
-     */
     public void applyMove(int moveCode) {
         if (isPawnMoveCode(moveCode)) {
             applyPawnMove(moveCode);
@@ -232,21 +144,10 @@ public final class MctsState {
         swapPlayers();
     }
 
-    /*
-     * Aplică doar mutarea pionului.
-     * Nu modifică graful.
-     * Nu recalculează distanțele.
-     */
     private void applyPawnMove(int moveCode) {
         currPlayerPos = posOf(decodePawnMoveRow(moveCode), decodePawnMoveCol(moveCode));
-        // currPlayerPos = poziția decodată din moveCode
     }
 
-    /*
-     * Aplică un perete.
-     * Nu reconstruiește tot graful.
-     * Elimină doar cele două muchii afectate.
-     */
     private void applyWallMove(int moveCode) {
         int bitIndex = wallBitIndex(decodeWallRow(moveCode), decodeWallCol(moveCode));
         long bit = 1L << bitIndex;
@@ -259,16 +160,8 @@ public final class MctsState {
         currPlayerWalls--;
         removeEdgesBlockedByWall(moveCode);
         distancesDirty = true;
-        // setează bitul în horizontalWalls sau verticalWalls
-        // scade currPlayerWalls
-        // removeEdgesBlockedByWall(moveCode)
-        // distancesDirty = true
     }
 
-    /*
-     * Schimbă perspectiva jucătorilor.
-     * După fiecare mutare, current player devine opponent și invers.
-     */
     private void swapPlayers() {
         int oldCurrPlayerPos = currPlayerPos;
         currPlayerPos = opponentPos;
@@ -281,19 +174,9 @@ public final class MctsState {
         int oldCurrPlayerFinishLine = currPlayerFinishLine;
         currPlayerFinishLine = opponentFinishLine;
         opponentFinishLine = oldCurrPlayerFinishLine;
-        // swap currPlayerPos cu opponentPos
-        // swap currPlayerWalls cu opponentWalls
-        // swap currPlayerFinishLine cu opponentFinishLine
     }
 
 
-    // ============================================================
-    // 10. UPDATE INCREMENTAL AL GRAFULUI
-    // ============================================================
-
-    /*
-     * Elimină din adjacencyMask cele două muchii blocate de perete.
-     */
     private void removeEdgesBlockedByWall(int wallMoveCode) {
         int row = decodeWallRow(wallMoveCode);
         int col = decodeWallCol(wallMoveCode);
@@ -306,14 +189,8 @@ public final class MctsState {
 
         removeEdge(posOf(row, col), posOf(row, col + 1));
         removeEdge(posOf(row + 1, col), posOf(row + 1, col + 1));
-        // decode wall row, col, orientation
-        // pentru perete orizontal: elimină două muchii verticale
-        // pentru perete vertical: elimină două muchii orizontale
     }
 
-    /*
-     * Elimină muchia bidirecțională dintre două celule.
-     */
     private void removeEdge(int a, int b) {
         if (b == a - BOARD_SIZE) {
             adjacencyMask[a] &= ~UP;
@@ -334,34 +211,17 @@ public final class MctsState {
             adjacencyMask[a] &= ~RIGHT;
             adjacencyMask[b] &= ~LEFT;
         }
-        // modifică adjacencyMask[a]
-        // modifică adjacencyMask[b]
     }
 
 
-    // ============================================================
-    // 11. VERIFICARE TERMINALĂ RAPIDĂ
-    // ============================================================
-
-    /*
-     * Verifică dacă jucătorul curent a câștigat.
-     * Nu folosește BFS.
-     */
     public boolean currentPlayerReachedFinishLine() {
         return rowOf(currPlayerPos) == currPlayerFinishLine;
     }
 
-    /*
-     * Verifică dacă adversarul a câștigat.
-     * Nu folosește BFS.
-     */
     public boolean opponentReachedFinishLine() {
         return rowOf(opponentPos) == opponentFinishLine;
     }
 
-    /*
-     * Returnează linia de finish a câștigătorului sau NO_WINNER.
-     */
     public int winnerFinishLine() {
         if (currentPlayerReachedFinishLine()) {
             return currPlayerFinishLine;
@@ -374,21 +234,10 @@ public final class MctsState {
         return NO_WINNER;
     }
 
-    /*
-     * Spune dacă starea este terminală.
-     */
     public boolean isTerminal() {
         return currentPlayerReachedFinishLine() || opponentReachedFinishLine();
     }
 
-
-    // ============================================================
-    // 12. DISTANȚE LA FINISH
-    // ============================================================
-
-    /*
-     * Recalculează topDistances și bottomDistances doar dacă este nevoie.
-     */
     private void ensureDistancesUpdated() {
         if (!distancesDirty) {
             return;
@@ -400,10 +249,6 @@ public final class MctsState {
         distancesDirty = false;
     }
 
-    /*
-     * BFS rapid dintr-o linie de finish către toate celulele.
-     * Nu folosește Queue, Set, Map.
-     */
     private void computeDistancesFromFinishLine(int finishRow, int[] outputDistances) {
         for (int i = 0; i < CELL_COUNT; i++) {
             outputDistances[i] = -1;
@@ -456,9 +301,6 @@ public final class MctsState {
         // BFS folosind adjacencyMask
     }
 
-    /*
-     * Distanța jucătorului curent până la finish.
-     */
     public int getCurrentPlayerDistanceToFinish() {
         ensureDistancesUpdated();
 
@@ -469,9 +311,6 @@ public final class MctsState {
         return bottomDistances[currPlayerPos];
     }
 
-    /*
-     * Distanța adversarului până la finish.
-     */
     public int getOpponentDistanceToFinish() {
         ensureDistancesUpdated();
 
@@ -483,20 +322,6 @@ public final class MctsState {
     }
 
 
-    // ============================================================
-    // 13. GENERARE MUTĂRI PION
-    // ============================================================
-
-    /*
-     * Generează doar mutările pionului pentru jucătorul curent.
-     *
-     * Scrie mutările în outputBuffer.
-     * Returnează câte mutări a scris.
-     *
-     * Important:
-     * Nu alocă List.
-     * Nu alocă Set.
-     */
     public int generatePawnMoves(int[] outputBuffer) {
         int count = 0;
         int currRow = rowOf(currPlayerPos);
@@ -635,10 +460,6 @@ public final class MctsState {
         return count;
     }
 
-    /*
-     * Returnează o mutare câștigătoare de pion, dacă există.
-     * Dacă nu există, returnează -1.
-     */
     public int findImmediateWinningPawnMove() {
         int count = generatePawnMoves(rolloutMoveBuffer);
 
@@ -652,21 +473,6 @@ public final class MctsState {
         return -1;
     }
 
-
-    // ============================================================
-    // 14. GENERARE MUTĂRI PENTRU MCTS
-    // ============================================================
-
-    /*
-     * Generează mutările candidate pentru nodurile MCTS.
-     *
-     * Recomandare:
-     * - toate mutările de pion
-     * - doar cei mai relevanți pereți
-     *
-     * Nu este obligatoriu să întoarcă toate mutările legale.
-     * Pentru MCTS, este mai important să fie rapid și relevant.
-     */
 
     public int generateCandidateMoves(int[] outputBuffer, MctsSelectionHeuristic selectionHeuristic) {
         int count = 0;
@@ -683,9 +489,6 @@ public final class MctsState {
         return count;
     }
 
-    /*
-     * Adaugă mutările pionului în buffer.
-     */
     private int appendPawnMoves(int[] outputBuffer, int count) {
 
         int pawnCount = generatePawnMoves(rolloutMoveBuffer);
@@ -718,14 +521,6 @@ public final class MctsState {
         return count;
     }
 
-    /*
-     * Adaugă doar pereți relevanți.
-     *
-     * Exemple de pereți relevanți:
-     * - lângă drumul minim al adversarului
-     * - lângă adversar
-     * - pereți care cresc distanța adversarului
-     */
     private int appendRelevantWallMoves(int[] outputBuffer, int count) {
         if (currPlayerWalls == 0) {
             return count;
@@ -750,11 +545,6 @@ public final class MctsState {
                 currCol);
     }
 
-    /*
-     * Adaugă pereți candidați lângă pioni, lângă pereții existenți și
-     * pe marginile laterale. Generarea rămâne pe buffer fix și filtrează
-     * rapid sloturile imposibile înainte de verificările BFS mai scumpe.
-     */
     private int appendWallMovesNearPawnsWallsEdges(int[] outputBuffer, int count) {
         if (currPlayerWalls == 0) {
             return count;
@@ -966,29 +756,7 @@ public final class MctsState {
             wallCandidateBuffer[bestIndex] = -1;
         }
 
-        // generează candidați în wallCandidateBuffer
-        // filtrează legalitatea
-        // păstrează top N pereți după scor euristic
-
         return count;
-    }
-
-
-    // ============================================================
-    // 15. GENERARE MUTĂRI PENTRU ROLLOUT
-    // ============================================================
-
-    /*
-     * Generează mutări foarte rapide pentru rollout.
-     *
-     * Recomandare:
-     * - în principal mutări de pion
-     * - eventual 1-3 pereți foarte relevanți
-     *
-     * Scopul este viteza, nu exhaustivitatea.
-     */
-    public int generateRolloutMoves(int[] outputBuffer) {
-        return generatePawnMoves(outputBuffer);
     }
 
     public int generateRolloutMoves(

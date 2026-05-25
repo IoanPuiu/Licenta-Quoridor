@@ -1,4 +1,4 @@
-package SlowModel;
+package StandardModel;
 
 public class Cell {
 

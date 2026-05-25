@@ -1,9 +1,9 @@
-package SlowModel;
+package StandardModel;
 
 import AI.MiniMax.MoveOrdering;
 import AI.MCTS.MctsRolloutHeuristic;
 import AI.MCTS.MctsSelectionHeuristic;
-import SlowModel.PlayerProfile.MctsVariant;
+import StandardModel.PlayerProfile.MctsVariant;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -100,8 +100,8 @@ public class MctsV0 implements Algorithm {
         }
 
         double rootWinRate = child.score / child.visits;
-        double playerWinRate = movingPlayerFinishLine == rootFinishLine
-                ? rootWinRate
+        double playerWinRate = movingPlayerFinishLine == rootFinishLine ?
+                rootWinRate
                 : WIN_REWARD - rootWinRate;
         double exploration = EXPLORATION_WEIGHT * Math.sqrt(parentVisitsLog / child.visits);
         return playerWinRate + exploration;

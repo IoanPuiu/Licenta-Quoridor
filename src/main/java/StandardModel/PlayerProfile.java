@@ -1,4 +1,4 @@
-package SlowModel;
+package StandardModel;
 
 import AI.MCTS.MctsRolloutHeuristic;
 import AI.MCTS.MctsSelectionHeuristic;

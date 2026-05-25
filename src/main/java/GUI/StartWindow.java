@@ -22,8 +22,8 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.TextAlignment;
 import javafx.stage.Stage;
-import SlowModel.PlayerProfile;
-import SlowModel.PlayerProfile.MctsVariant;
+import StandardModel.PlayerProfile;
+import StandardModel.PlayerProfile.MctsVariant;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -200,7 +200,7 @@ public class StartWindow {
     }
 
     private HBox createSetupPanel() {
-        VBox sideOptions = new VBox(14, createHumanCard(), createMinimaxCard(), createGymCard());
+        VBox sideOptions = new VBox(14, createHumanCard(), createMinimaxCard());
         sideOptions.setPrefWidth(316);
         sideOptions.setMaxWidth(326);
 
@@ -224,7 +224,7 @@ public class StartWindow {
 
     private VBox createMinimaxCard() {
         return createCategoryCard(
-                "Minimax",
+                "MiniMax alfa-beta prunning",
                 188,
                 createFieldLabel("Depth"),
                 minimaxDepthSegments,
@@ -240,7 +240,7 @@ public class StartWindow {
         return createCategoryCard(
                 "MCTS",
                 470,
-                createFieldLabel("Depth"),
+                createFieldLabel("Iterations"),
                 mctsDepthSegments,
                 createFieldLabel("Variant"),
                 mctsVariantSegments,
@@ -436,7 +436,7 @@ public class StartWindow {
         HBox segments = createOptionSegments(
                 mctsVariantGroup,
                 MctsVariant.V0,
-                new Option<>(MctsVariant.V0, "V0", "Baseline MCTS with the original tree policy."),
+                new Option<>(MctsVariant.V0, "Standard", "Baseline MCTS with the original tree policy."),
                 new Option<>(MctsVariant.PERFORMANCE, "Performance", "Optimized MCTS with progressive widening."));
 
         mctsVariantGroup.selectedToggleProperty().addListener((obs, oldToggle, newToggle) -> {

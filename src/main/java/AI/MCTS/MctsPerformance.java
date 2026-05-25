@@ -13,25 +13,11 @@ public class MctsPerformance implements Algorithm {
     private static final double EXPLORATION_WEIGHT = Math.sqrt(2.0);
     private static final double WIN_REWARD = 1.0;
     private static final double LOSS_REWARD = 0.0;
-
-    /*
-     * Rollout scurt.
-     * Nu mai simula 120+ mutări cu toate zidurile posibile.
-     */
     private static final int DEFAULT_ROLLOUT_MOVE_LIMIT = 32;
 
-    /*
-     * Progressive widening:
-     * Nu extindem toate mutările imediat.
-     */
+    //Progressive widening:
     private static final double PW_CONSTANT = 2.0;
     private static final double PW_ALPHA = 0.5;
-
-    /*
-     * Trebuie să fie suficient pentru:
-     * - toate mutările de pion
-     * - top N pereți relevanți generați de MctsState
-     */
     private static final int MAX_CANDIDATE_MOVES = 64;
 
     private final int steps;
@@ -77,16 +63,10 @@ public class MctsPerformance implements Algorithm {
     public int generateMove(GameState state) {
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
-        /*
-         * Convertim starea normală într-o stare optimizată pentru MCTS.
-         */
         MctsState rootState = new MctsState(state);
 
         int rootFinishLine = rootState.getCurrPlayerFinishLine();
 
-        /*
-         * Caz simplu: dacă pot câștiga imediat, nu mai rulez MCTS.
-         */
         int winningMove = rootState.findImmediateWinningPawnMove();
         if (winningMove != NO_MOVE) {
             return winningMove;
@@ -101,10 +81,6 @@ public class MctsPerformance implements Algorithm {
         for (int step = 0; step < steps; step++) {
             Node selectedNode = select(root, rootFinishLine, random);
 
-            /*
-             * Copiem doar starea nodului selectat pentru rollout.
-             * Rollout-ul modifică această copie, nu starea din arbore.
-             */
             MctsState rolloutState = new MctsState(selectedNode.state);
 
             double result = rollout(rolloutState, rootFinishLine, random);
@@ -115,41 +91,32 @@ public class MctsPerformance implements Algorithm {
         return bestRootMove(root);
     }
 
-    // ============================================================
+
     // 1. SELECTION + EXPANSION
-    // ============================================================
-
     private Node select(Node root, int rootFinishLine, ThreadLocalRandom random) {
-        Node current = root;
+        Node currentNode = root;
 
-        while (!current.state.isTerminal()) {
+        while (!currentNode.state.isTerminal()) {
 
-            /*
-             * Progressive widening:
-             * Extindem nodul doar dacă are voie să aibă mai mulți copii.
-             */
-            if (current.hasUntriedMoves() && shouldExpand(current)) {
-                return expand(current, random);
+            // Progressive Widening: Extindem nodul doar dacă are voie să aibă mai mulți copii.
+            if (currentNode.hasUntriedMoves() && shouldExpand(currentNode)) {
+                return expand(currentNode, random);
             }
 
-            /*
-             * Dacă nu are copii, dar are mutări neîncercate, trebuie extins.
-             */
-            if (current.childCount == 0) {
-                if (current.hasUntriedMoves()) {
-                    return expand(current, random);
+            // Dacă nu are copii, dar are mutări neîncercate, trebuie extins.
+            if (currentNode.childCount == 0) {
+                if (currentNode.hasUntriedMoves()) {
+                    return expand(currentNode, random);
                 }
 
-                return current;
+                return currentNode;
             }
 
-            /*
-             * Alegem copilul cu cel mai bun UCT.
-             */
-            current = bestUctChild(current, rootFinishLine);
+            //Alegem copilul cu cel mai bun UCT.
+            currentNode = bestUctChild(currentNode, rootFinishLine);
         }
 
-        return current;
+        return currentNode;
     }
 
     private boolean shouldExpand(Node node) {
@@ -173,10 +140,7 @@ public class MctsPerformance implements Algorithm {
         return child;
     }
 
-    // ============================================================
     // 2. UCT
-    // ============================================================
-
     private Node bestUctChild(Node node, int rootFinishLine) {
         Node bestChild = null;
         double bestScore = Double.NEGATIVE_INFINITY;
@@ -213,14 +177,8 @@ public class MctsPerformance implements Algorithm {
             return Double.POSITIVE_INFINITY;
         }
 
-        /*
-         * child.score este mereu din perspectiva root player-ului.
-         */
         double rootWinRate = child.score / child.visits;
 
-        /*
-         * Dacă la acest nod mută adversarul, el va prefera scorul opus.
-         */
         double playerWinRate = movingPlayerFinishLine == rootFinishLine
                 ? rootWinRate
                 : WIN_REWARD - rootWinRate;
@@ -231,10 +189,7 @@ public class MctsPerformance implements Algorithm {
         return playerWinRate + exploration;
     }
 
-    // ============================================================
-    // 3. ROLLOUT RAPID
-    // ============================================================
-
+    // 3. ROLLOUT
     private double rollout(
             MctsState state,
             int rootFinishLine,
@@ -250,12 +205,6 @@ public class MctsPerformance implements Algorithm {
                         : LOSS_REWARD;
             }
 
-            /*
-             * selectRolloutMove trebuie să fie foarte rapid:
-             * - preferabil doar mutări de pion
-             * - eventual 1-3 pereți foarte relevanți
-             * - fără getAllPossibleMoveCodes()
-             */
             int move = state.selectRolloutMove(random, rolloutHeuristic);
 
             if (move == NO_MOVE) {
@@ -265,16 +214,11 @@ public class MctsPerformance implements Algorithm {
             state.applyMove(move);
         }
 
-        /*
-         * Dacă rollout-ul nu termină jocul, evaluăm euristic poziția.
-         */
+
         return state.evaluateForRoot(rootFinishLine);
     }
 
-    // ============================================================
     // 4. BACKPROPAGATION
-    // ============================================================
-
     private void backpropagate(Node node, double resultForRootPlayer) {
         Node current = node;
 
@@ -285,10 +229,7 @@ public class MctsPerformance implements Algorithm {
         }
     }
 
-    // ============================================================
     // 5. ALEGEREA MUTĂRII FINALE
-    // ============================================================
-
     private int bestRootMove(Node root) {
         Node bestChild = null;
 
@@ -322,19 +263,13 @@ public class MctsPerformance implements Algorithm {
         return bestChild.move;
     }
 
-    // ============================================================
     // 6. NOD MCTS
-    // ============================================================
-
     private static final class Node {
 
         private final MctsState state;
         private final Node parent;
         private final int move;
 
-        /*
-         * Folosim array-uri fixe, nu List<Node>, nu Set<Integer>.
-         */
         private final int[] untriedMoves;
         private int untriedCount;
 
@@ -362,14 +297,6 @@ public class MctsPerformance implements Algorithm {
             if (state.isTerminal()) {
                 this.untriedCount = 0;
             } else {
-                /*
-                 * Foarte important:
-                 * generateCandidateMoves NU trebuie să genereze toate zidurile.
-                 *
-                 * Ideal:
-                 * - toate mutările de pion
-                 * - top 10-30 pereți relevanți
-                 */
                 this.untriedCount = state.generateCandidateMoves(this.untriedMoves, selectionHeuristic);
             }
         }
@@ -382,10 +309,7 @@ public class MctsPerformance implements Algorithm {
             int index = random.nextInt(untriedCount);
             int move = untriedMoves[index];
 
-            /*
-             * Remove O(1):
-             * înlocuim mutarea aleasă cu ultima mutare din buffer.
-             */
+            //înlocuim mutarea aleasă cu ultima mutare din buffer
             untriedMoves[index] = untriedMoves[untriedCount - 1];
             untriedCount--;
 

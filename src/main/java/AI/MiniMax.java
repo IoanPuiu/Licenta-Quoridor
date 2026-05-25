@@ -71,6 +71,7 @@ public class MiniMax implements Algorithm {
             child.update(move);
 
             int score = -minimax(child, maxDepth - 1, -beta, -alpha);
+
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;

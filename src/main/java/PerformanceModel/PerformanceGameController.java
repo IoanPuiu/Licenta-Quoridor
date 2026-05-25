@@ -6,8 +6,8 @@ import AI.MiniMax;
 import AI.MCTS.MctsPerformance;
 import AI.MCTS.MctsV0;
 import GUI.GameUI;
-import SlowModel.PlayerProfile;
-import SlowModel.PlayerType;
+import StandardModel.PlayerProfile;
+import StandardModel.PlayerType;
 import javafx.application.Platform;
 
 import java.util.Locale;
@@ -131,6 +131,7 @@ public class PerformanceGameController {
                     }
 
                     boolean playerAMoved = isCurrentPlayerA;
+
                     boolean includeInAverage = state.getCurrPlayerWalls() > 0;
                     WallImpact wallImpact = GameState.isPawnMoveCode(move)
                             ? WallImpact.none()
@@ -177,13 +178,14 @@ public class PerformanceGameController {
             case MINIMAX -> new MiniMax(
                     playerProfile.minimaxDepth(),
                     playerProfile.minimaxMoveOrdering());
-            case MCTS_EASY, MCTS_MEDIUM, MCTS_HARD, MCTS_EXTREME -> playerProfile.mctsVariant() == PlayerProfile.MctsVariant.PERFORMANCE
-                    ? new MctsPerformance(
-                            playerProfile.mctsDepth(),
-                            playerProfile.mctsRolloutMoveLimit(),
-                            playerProfile.mctsSelectionHeuristic(),
-                            playerProfile.mctsRolloutHeuristic())
-                    : new MctsV0(playerProfile.mctsDepth(), playerProfile.mctsRolloutMoveLimit());
+            case MCTS_EASY, MCTS_MEDIUM, MCTS_HARD, MCTS_EXTREME ->
+                    playerProfile.mctsVariant() == PlayerProfile.MctsVariant.PERFORMANCE ?
+                            new MctsPerformance(
+                                    playerProfile.mctsDepth(),
+                                    playerProfile.mctsRolloutMoveLimit(),
+                                    playerProfile.mctsSelectionHeuristic(),
+                                    playerProfile.mctsRolloutHeuristic())
+                            : new MctsV0(playerProfile.mctsDepth(), playerProfile.mctsRolloutMoveLimit());
             case GYM_PYTHON -> new GymPython();
             case HUMAN -> throw new IllegalArgumentException("Performance controller supports only AI players.");
         };

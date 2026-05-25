@@ -2,10 +2,10 @@ package GUI;
 
 import PerformanceModel.GameState;
 import PerformanceModel.WallImpact;
-import SlowModel.Move;
-import SlowModel.MoveType;
-import SlowModel.Player;
-import SlowModel.PlayerProfile;
+import StandardModel.Move;
+import StandardModel.MoveType;
+import StandardModel.Player;
+import StandardModel.PlayerProfile;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;

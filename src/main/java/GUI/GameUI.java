@@ -7,11 +7,11 @@ import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-import SlowModel.Game;
-import SlowModel.Move;
-import SlowModel.Player;
-import SlowModel.PlayerProfile;
-import SlowModel.ThinkingStats;
+import StandardModel.Game;
+import StandardModel.Move;
+import StandardModel.Player;
+import StandardModel.PlayerProfile;
+import StandardModel.ThinkingStats;
 
 import java.util.List;
 import java.util.concurrent.BlockingQueue;

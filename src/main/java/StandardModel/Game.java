@@ -1,4 +1,4 @@
-package SlowModel;
+package StandardModel;
 
 import AI.Algorithm;
 import AI.GymPython;

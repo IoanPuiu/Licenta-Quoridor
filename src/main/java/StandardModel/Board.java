@@ -1,4 +1,4 @@
-package SlowModel;
+package StandardModel;
 
 import java.util.*;
 
@@ -262,4 +262,4 @@ public class Board {
     }
 }
 
-// Create Unit Tests for the SlowModel package
+// Create Unit Tests for the StandardModel package

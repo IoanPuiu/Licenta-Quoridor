@@ -2,9 +2,9 @@ package GUI;
 
 import PerformanceModel.GameState;
 import PerformanceModel.WallImpact;
-import SlowModel.Move;
-import SlowModel.MoveType;
-import SlowModel.Player;
+import StandardModel.Move;
+import StandardModel.MoveType;
+import StandardModel.Player;
 import javafx.animation.PauseTransition;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;

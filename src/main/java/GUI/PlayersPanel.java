@@ -1,6 +1,6 @@
 package GUI;
 
-import SlowModel.PlayerProfile;
+import StandardModel.PlayerProfile;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;

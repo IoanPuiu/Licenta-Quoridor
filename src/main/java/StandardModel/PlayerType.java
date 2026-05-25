@@ -1,4 +1,4 @@
-package SlowModel;
+package StandardModel;
 
 public enum PlayerType {
     HUMAN("Human"),
