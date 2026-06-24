@@ -296,9 +296,6 @@ public final class MctsState {
                 }
             }
         }
-        // Arrays.fill(outputDistances, INF)
-        // pune toate celulele de pe finishRow în bfsQueue
-        // BFS folosind adjacencyMask
     }
 
     public int getCurrentPlayerDistanceToFinish() {
@@ -453,10 +450,6 @@ public final class MctsState {
                 outputBuffer[count++] = encodePawnMove(rowOf(next), colOf(next));
             }
         }
-        // calculează mutările normale
-        // calculează săritura peste adversar
-        // calculează mutările diagonale dacă este cazul
-        // returnează count
         return count;
     }
 
@@ -812,12 +805,6 @@ public final class MctsState {
         return false;
     }
 
-    /*
-     * Alege o mutare rapidă pentru rollout.
-     */
-    public int selectRolloutMove(ThreadLocalRandom random) {
-        return selectRolloutMove(random, MctsRolloutHeuristic.PAWN_MOVES);
-    }
 
     public int selectRolloutMove(ThreadLocalRandom random, MctsRolloutHeuristic rolloutHeuristic) {
         int winningMove = findImmediateWinningPawnMove();
@@ -835,14 +822,6 @@ public final class MctsState {
         return rolloutMoveBuffer[random.nextInt(count)];
     }
 
-
-    // ============================================================
-    // 16. VALIDARE PEREȚI
-    // ============================================================
-
-    /*
-     * Verifică rapid dacă un perete este ocupat sau se suprapune.
-     */
     public boolean isWallSlotFree(int wallMoveCode) {
         int row = decodeWallRow(wallMoveCode);
         int col = decodeWallCol(wallMoveCode);
@@ -874,17 +853,9 @@ public final class MctsState {
                 return false;
             }
         }
-        // verifică horizontalWalls / verticalWalls
-        // verifică suprapunere
-        // verifică intersectare
         return true;
     }
 
-    /*
-     * Verifică dacă peretele lasă drum valid ambilor jucători.
-     *
-     * Folosit doar pentru pereții candidați, nu pentru toate pozițiile posibile.
-     */
     public boolean wallKeepsBothPlayersConnected(int wallMoveCode) {
         int row = decodeWallRow(wallMoveCode);
         int col = decodeWallCol(wallMoveCode);
@@ -925,31 +896,15 @@ public final class MctsState {
         adjacencyMask[secondA] = oldSecondA;
         adjacencyMask[secondB] = oldSecondB;
         distancesDirty = true;
-        // aplică temporar peretele
-        // BFS doar pentru existența drumului
-        // revine la starea anterioară
         return currentConnected && opponentConnected;
     }
 
-    /*
-     * Verifică dacă peretele este legal complet.
-     */
     public boolean isLegalWallMove(int wallMoveCode) {
         return currPlayerWalls > 0
                 && isWallSlotFree(wallMoveCode)
                 && wallKeepsBothPlayersConnected(wallMoveCode);
     }
 
-
-    // ============================================================
-    // 17. EVALUARE EURISTICĂ
-    // ============================================================
-
-    /*
-     * Evaluare rapidă pentru MCTS când rollout-ul se oprește înainte de final.
-     *
-     * Returnează valoare între 0 și 1 din perspectiva root player-ului.
-     */
     public double evaluateForRoot(int rootFinishLine) {
         ensureDistancesUpdated();
 
@@ -973,15 +928,11 @@ public final class MctsState {
         return evaluateDistancesAndWalls(rootDistance, opponentDistance, rootWalls, opponentWalls);
     }
 
-    /*
-     * Transformă distanțele și pereții într-un scor 0..1.
-     */
     private double evaluateDistancesAndWalls(
             int rootDistance,
             int opponentDistance,
             int rootWalls,
             int opponentWalls) {
-        // scor gradual, nu doar 0 / 0.5 / 1
         if (rootDistance == 0) {
             return 1.0;
         }
@@ -1002,11 +953,6 @@ public final class MctsState {
         return score;
     }
 
-
-    // ============================================================
-    // 18. HELPERS POZIȚII
-    // ============================================================
-
     private static int rowOf(int pos) {
         return pos / BOARD_SIZE;
     }
@@ -1019,33 +965,23 @@ public final class MctsState {
         return row * BOARD_SIZE + col;
     }
 
-
-    // ============================================================
-    // 19. HELPERS MUTĂRI
-    // ============================================================
-
     public static boolean isPawnMoveCode(int moveCode) {
-        // returnează true dacă moveCode reprezintă mutare de pion
         return moveCode >= GameState.PAWN_MOVE_CODE_OFFSET;
     }
 
     public static int encodePawnMove(int row, int col) {
-        // codifică o mutare de pion
         return GameState.PAWN_MOVE_CODE_OFFSET + posOf(row, col);
     }
 
     public static int decodePawnMoveRow(int moveCode) {
-        // extrage rândul din moveCode
         return (moveCode - GameState.PAWN_MOVE_CODE_OFFSET) / BOARD_SIZE;
     }
 
     public static int decodePawnMoveCol(int moveCode) {
-        // extrage coloana din moveCode
         return (moveCode - GameState.PAWN_MOVE_CODE_OFFSET) % BOARD_SIZE;
     }
 
     public static int encodeWallMove(int row, int col, boolean horizontal) {
-        // codifică o mutare de perete
         return wallBitIndex(row, col) * 2 + (horizontal ? 0 : 1);
     }
 
@@ -1058,18 +994,12 @@ public final class MctsState {
     }
 
     public static boolean decodeWallOrientation(int moveCode) {
-        // true = horizontal, false = vertical
         return moveCode % 2 == 0;
     }
 
     private static int wallBitIndex(int row, int col) {
         return row * WALL_GRID_SIZE + col;
     }
-
-
-    // ============================================================
-    // 20. GETTERE MINIME
-    // ============================================================
 
     public int getCurrPlayerFinishLine() {
         return currPlayerFinishLine;
